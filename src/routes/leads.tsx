@@ -112,8 +112,8 @@ function LeadsPage() {
         notes: payload.notes || null,
       };
       if (payload.id) {
-        const { id, ...rest } = row;
-        const { error } = await supabase.from("leads").update(rest).eq("id", id);
+        const { id: _id, ...rest } = row;
+        const { error } = await supabase.from("leads").update(rest).eq("id", payload.id);
         if (error) throw error;
       } else {
         const { error } = await supabase.from("leads").insert({ ...row, user_id: user!.id });
