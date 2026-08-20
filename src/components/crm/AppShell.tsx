@@ -3,6 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   Target,
+  Sparkles,
   CalendarDays,
   Users,
   FileText,
@@ -18,6 +19,7 @@ import { Button } from "@/components/ui/button";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/generator", label: "Lead Generator", icon: Sparkles },
   { to: "/leads", label: "Lead Tracker", icon: Target },
   { to: "/meetings", label: "Meetings", icon: CalendarDays },
   { to: "/clients", label: "Clients", icon: Users },

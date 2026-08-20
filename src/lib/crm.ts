@@ -1,3 +1,6 @@
+/** Daily lead generation goal for the agency workflow. */
+export const DAILY_TARGET = 50;
+
 export const LEAD_STATUSES = [
   "READY",
   "PENDING",

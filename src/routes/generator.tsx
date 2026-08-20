@@ -8,13 +8,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { RequireAuth } from "@/components/crm/RequireAuth";
 import { AppShell, EmptyState, TableShell } from "@/components/crm/AppShell";
 import { KpiCard } from "@/components/crm/KpiCard";
-import { formatDateTime } from "@/lib/crm";
+import { DAILY_TARGET, formatDateTime } from "@/lib/crm";
 import { generateLeads, getLeadGenStatus, type GeneratedLead } from "@/lib/leadgen.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-export const DAILY_TARGET = 50;
 
 export const Route = createFileRoute("/generator")({
   head: () => ({
