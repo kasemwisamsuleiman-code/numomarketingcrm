@@ -136,6 +136,51 @@ export type Database = {
           },
         ]
       }
+      lead_gen_runs: {
+        Row: {
+          category: string
+          created_at: string
+          created_count: number
+          error: string | null
+          id: string
+          location: string
+          rejected_count: number
+          requested: number
+          skipped_duplicates: number
+          source: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          created_count?: number
+          error?: string | null
+          id?: string
+          location: string
+          rejected_count?: number
+          requested?: number
+          skipped_duplicates?: number
+          source?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_count?: number
+          error?: string | null
+          id?: string
+          location?: string
+          rejected_count?: number
+          requested?: number
+          skipped_duplicates?: number
+          source?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           business_hours: string | null
@@ -145,10 +190,13 @@ export type Database = {
           date_added: string
           email: string | null
           id: string
+          lead_score: number | null
           location: string | null
           notes: string | null
+          outreach_channel: string | null
           personalized_line: string | null
           phone: string | null
+          source: string
           status: string
           updated_at: string
           user_id: string
@@ -162,10 +210,13 @@ export type Database = {
           date_added?: string
           email?: string | null
           id?: string
+          lead_score?: number | null
           location?: string | null
           notes?: string | null
+          outreach_channel?: string | null
           personalized_line?: string | null
           phone?: string | null
+          source?: string
           status?: string
           updated_at?: string
           user_id: string
@@ -179,10 +230,13 @@ export type Database = {
           date_added?: string
           email?: string | null
           id?: string
+          lead_score?: number | null
           location?: string | null
           notes?: string | null
+          outreach_channel?: string | null
           personalized_line?: string | null
           phone?: string | null
+          source?: string
           status?: string
           updated_at?: string
           user_id?: string
