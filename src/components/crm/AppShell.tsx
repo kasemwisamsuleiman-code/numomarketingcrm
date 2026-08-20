@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Users,
   FileText,
+  Settings,
   Menu,
   X,
   LogOut,
@@ -21,6 +22,7 @@ const NAV = [
   { to: "/meetings", label: "Meetings", icon: CalendarDays },
   { to: "/clients", label: "Clients", icon: Users },
   { to: "/invoices", label: "Invoices", icon: FileText },
+  { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
 export function AppShell({
