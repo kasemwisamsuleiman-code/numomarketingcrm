@@ -359,10 +359,41 @@ function LeadsPage() {
       title="Lead Tracker"
       subtitle="Every prospect, outreach status and personalized line — searchable, sortable and duplicate-aware."
       actions={
-        <Button onClick={openNew} className="rounded-full bg-ink px-5 text-ink-foreground hover:bg-ink/90">
-          <Plus className="mr-1 size-4" /> Add Lead
-        </Button>
+        <>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file) return;
+              importLeads.mutate(await file.text());
+            }}
+          />
+          <Button
+            variant="outline"
+            onClick={() => fileRef.current?.click()}
+            disabled={importLeads.isPending}
+            className="rounded-full border-gold/40 px-5"
+          >
+            <Upload className="mr-1 size-4" /> Import CSV
+          </Button>
+          <Button
+            variant="outline"
+            onClick={exportCsv}
+            disabled={visible.length === 0}
+            className="rounded-full border-gold/40 px-5"
+          >
+            <Download className="mr-1 size-4" /> Export CSV
+          </Button>
+          <Button onClick={openNew} className="rounded-full bg-ink px-5 text-ink-foreground hover:bg-ink/90">
+            <Plus className="mr-1 size-4" /> Add Lead
+          </Button>
+        </>
       }
+
     >
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Total Leads" value={kpis.total} tone="ink" hint={`${kpis.ready} ready for outreach`} />
