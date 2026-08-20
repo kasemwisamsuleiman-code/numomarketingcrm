@@ -485,6 +485,19 @@ function LeadsPage() {
                 <td className="max-w-[220px] truncate px-4 py-4 text-muted-foreground">{l.notes || "—"}</td>
                 <td className="px-4 py-4">
                   <div className="flex justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Convert lead to client"
+                      title="Convert to client"
+                      disabled={convert.isPending}
+                      onClick={() => {
+                        if (confirm(`Convert ${l.business_name} into a client?`)) convert.mutate(l);
+                      }}
+                    >
+                      <UserPlus className="size-4" />
+                    </Button>
+
                     <Button variant="ghost" size="icon" onClick={() => openEdit(l)} aria-label="Edit lead">
                       <Pencil className="size-4" />
                     </Button>
