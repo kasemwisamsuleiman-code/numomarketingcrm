@@ -67,6 +67,9 @@ type Lead = {
   website: string | null;
   business_hours: string | null;
   personalized_line: string | null;
+  lead_score: number | null;
+  source: string | null;
+  outreach_channel: string | null;
   status: string;
   notes: string | null;
 };
@@ -441,7 +444,7 @@ function LeadsPage() {
       </div>
 
       <TableShell className="mt-4">
-        <table className="w-full min-w-[1300px] border-collapse text-sm">
+        <table className="w-full min-w-[1650px] border-collapse text-sm">
           <thead>
             <tr className="bg-ink text-[11px] font-semibold tracking-[0.12em] text-ink-muted">
               <th className="px-4 py-4 text-left">{sortBtn("date_added", "Date Added")}</th>
@@ -453,6 +456,9 @@ function LeadsPage() {
               <th className="px-4 py-4 text-left uppercase">Website</th>
               <th className="px-4 py-4 text-left uppercase">Hours</th>
               <th className="px-4 py-4 text-left uppercase">Personalized Line</th>
+              <th className="px-4 py-4 text-left">{sortBtn("lead_score", "Score")}</th>
+              <th className="px-4 py-4 text-left uppercase">Channel</th>
+              <th className="px-4 py-4 text-left uppercase">Source</th>
               <th className="px-4 py-4 text-left">{sortBtn("status", "Status")}</th>
               <th className="px-4 py-4 text-left uppercase">Notes</th>
               <th className="px-4 py-4 text-right uppercase">Actions</th>
@@ -479,6 +485,19 @@ function LeadsPage() {
                 <td className="max-w-[180px] truncate px-4 py-4 text-muted-foreground">{l.website || "—"}</td>
                 <td className="max-w-[160px] truncate px-4 py-4 text-muted-foreground">{l.business_hours || "—"}</td>
                 <td className="max-w-[260px] truncate px-4 py-4 text-muted-foreground">{l.personalized_line || "—"}</td>
+                <td className="px-4 py-4">
+                  {typeof l.lead_score === "number" ? (
+                    <span className="inline-flex min-w-10 items-center justify-center rounded-full border border-gold/40 bg-gold-soft px-2 py-1 text-xs font-semibold text-gold-foreground">
+                      {l.lead_score}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </td>
+                <td className="whitespace-nowrap px-4 py-4 text-muted-foreground">{l.outreach_channel || "—"}</td>
+                <td className="whitespace-nowrap px-4 py-4 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                  {l.source || "MANUAL"}
+                </td>
                 <td className="px-4 py-4">
                   <StatusPill status={l.status} />
                 </td>
