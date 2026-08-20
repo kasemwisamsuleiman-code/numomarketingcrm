@@ -1,6 +1,18 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+export type GeneratedLead = {
+  id: string;
+  business_name: string;
+  category: string | null;
+  location: string | null;
+  phone: string | null;
+  email: string | null;
+  lead_score: number | null;
+  outreach_channel: string | null;
+  personalized_line: string | null;
+};
+
 export const getLeadGenStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
@@ -33,7 +45,7 @@ export const generateLeads = createServerFn({ method: "POST" })
     let created = 0;
     let duplicates = 0;
     let rejected = 0;
-    let insertedLeads: Array<Record<string, unknown>> = [];
+    let insertedLeads: GeneratedLead[] = [];
 
     try {
       const candidates = usedApify
@@ -78,7 +90,17 @@ export const generateLeads = createServerFn({ method: "POST" })
       if (rows.length > 0) {
         const { data: inserted, error } = await supabase.from("leads").insert(rows).select();
         if (error) throw new Error(error.message);
-        insertedLeads = (inserted ?? []) as Array<Record<string, unknown>>;
+        insertedLeads = (inserted ?? []).map((row) => ({
+          id: String(row.id),
+          business_name: String(row.business_name),
+          category: row.category ?? null,
+          location: row.location ?? null,
+          phone: row.phone ?? null,
+          email: row.email ?? null,
+          lead_score: row.lead_score ?? null,
+          outreach_channel: row.outreach_channel ?? null,
+          personalized_line: row.personalized_line ?? null,
+        }));
         created = insertedLeads.length;
       }
 
