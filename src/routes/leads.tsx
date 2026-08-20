@@ -1,7 +1,17 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Trash2, Pencil, ArrowUpDown, AlertTriangle } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Trash2,
+  Pencil,
+  ArrowUpDown,
+  AlertTriangle,
+  Download,
+  Upload,
+  UserPlus,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,6 +20,8 @@ import { AppShell, EmptyState, TableShell } from "@/components/crm/AppShell";
 import { KpiCard } from "@/components/crm/KpiCard";
 import { StatusPill } from "@/components/crm/StatusPill";
 import { LEAD_STATUSES, formatDate, normalizeKey, normalizePhone, type LeadStatus } from "@/lib/crm";
+import { downloadCsv, parseCsv, toCsv } from "@/lib/csv";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -138,6 +150,99 @@ function LeadsPage() {
     },
   });
 
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const importLeads = useMutation({
+    mutationFn: async (text: string) => {
+      const rows = parseCsv(text);
+      if (rows.length === 0) throw new Error("No rows found in that CSV.");
+      const existing = new Set(leads.map((l) => normalizeKey(l.business_name)));
+      const payload: Record<string, unknown>[] = [];
+      let skipped = 0;
+      for (const r of rows) {
+        const name = r["business_name"] || r["business"] || r["name"] || "";
+        if (!name) {
+          skipped++;
+          continue;
+        }
+        if (existing.has(normalizeKey(name))) {
+          skipped++;
+          continue;
+        }
+        existing.add(normalizeKey(name));
+        const status = (r["status"] || r["outreach_status"] || "READY").toUpperCase();
+        payload.push({
+          user_id: user!.id,
+          business_name: name,
+          date_added: /^\d{4}-\d{2}-\d{2}$/.test(r["date_added"] ?? "")
+            ? r["date_added"]
+            : new Date().toISOString().slice(0, 10),
+          category: r["category"] || null,
+          location: r["location"] || null,
+          phone: r["phone"] || null,
+          email: r["email"] || null,
+          website: r["website"] || null,
+          business_hours: r["business_hours"] || r["hours"] || null,
+          personalized_line: r["personalized_line"] || null,
+          status: (LEAD_STATUSES as readonly string[]).includes(status) ? status : "READY",
+          notes: r["notes"] || null,
+        });
+      }
+      if (payload.length === 0) throw new Error("Nothing new to import — all rows were duplicates or unnamed.");
+      const { error } = await supabase.from("leads").insert(payload as never);
+      if (error) throw error;
+      return { imported: payload.length, skipped };
+    },
+    onSuccess: ({ imported, skipped }) => {
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      toast.success(`Imported ${imported} lead${imported === 1 ? "" : "s"}${skipped ? ` · ${skipped} skipped` : ""}`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const convert = useMutation({
+    mutationFn: async (lead: Lead) => {
+      const { error: cErr } = await supabase.from("clients").insert({
+        user_id: user!.id,
+        name: lead.business_name,
+        email: lead.email,
+        phone: lead.phone,
+        company: lead.business_name,
+        address: lead.location,
+        status: "ONBOARDING",
+        notes: lead.notes,
+      });
+      if (cErr) throw cErr;
+      const { error: lErr } = await supabase.from("leads").update({ status: "CLIENT" }).eq("id", lead.id);
+      if (lErr) throw lErr;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      qc.invalidateQueries({ queryKey: ["clients"] });
+      toast.success("Lead converted to client");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const exportCsv = () => {
+    const columns = [
+      "date_added",
+      "business_name",
+      "category",
+      "location",
+      "phone",
+      "email",
+      "website",
+      "business_hours",
+      "personalized_line",
+      "status",
+      "notes",
+    ];
+    downloadCsv(`numo-leads-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(visible, columns));
+  };
+
+
+
   const categories = useMemo(
     () => Array.from(new Set(leads.map((l) => l.category).filter(Boolean) as string[])).sort(),
     [leads],
@@ -254,10 +359,41 @@ function LeadsPage() {
       title="Lead Tracker"
       subtitle="Every prospect, outreach status and personalized line — searchable, sortable and duplicate-aware."
       actions={
-        <Button onClick={openNew} className="rounded-full bg-ink px-5 text-ink-foreground hover:bg-ink/90">
-          <Plus className="mr-1 size-4" /> Add Lead
-        </Button>
+        <>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file) return;
+              importLeads.mutate(await file.text());
+            }}
+          />
+          <Button
+            variant="outline"
+            onClick={() => fileRef.current?.click()}
+            disabled={importLeads.isPending}
+            className="rounded-full border-gold/40 px-5"
+          >
+            <Upload className="mr-1 size-4" /> Import CSV
+          </Button>
+          <Button
+            variant="outline"
+            onClick={exportCsv}
+            disabled={visible.length === 0}
+            className="rounded-full border-gold/40 px-5"
+          >
+            <Download className="mr-1 size-4" /> Export CSV
+          </Button>
+          <Button onClick={openNew} className="rounded-full bg-ink px-5 text-ink-foreground hover:bg-ink/90">
+            <Plus className="mr-1 size-4" /> Add Lead
+          </Button>
+        </>
       }
+
     >
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Total Leads" value={kpis.total} tone="ink" hint={`${kpis.ready} ready for outreach`} />
@@ -349,6 +485,19 @@ function LeadsPage() {
                 <td className="max-w-[220px] truncate px-4 py-4 text-muted-foreground">{l.notes || "—"}</td>
                 <td className="px-4 py-4">
                   <div className="flex justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Convert lead to client"
+                      title="Convert to client"
+                      disabled={convert.isPending}
+                      onClick={() => {
+                        if (confirm(`Convert ${l.business_name} into a client?`)) convert.mutate(l);
+                      }}
+                    >
+                      <UserPlus className="size-4" />
+                    </Button>
+
                     <Button variant="ghost" size="icon" onClick={() => openEdit(l)} aria-label="Edit lead">
                       <Pencil className="size-4" />
                     </Button>
