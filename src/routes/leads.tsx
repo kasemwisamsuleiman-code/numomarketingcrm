@@ -89,7 +89,7 @@ const emptyLead = {
 };
 
 type LeadForm = typeof emptyLead;
-type SortKey = "date_added" | "business_name" | "status" | "location";
+type SortKey = "date_added" | "business_name" | "status" | "location" | "lead_score";
 
 function LeadsPage() {
   const { user } = useAuth();
@@ -238,6 +238,9 @@ function LeadsPage() {
       "website",
       "business_hours",
       "personalized_line",
+      "lead_score",
+      "outreach_channel",
+      "source",
       "status",
       "notes",
     ];
@@ -286,6 +289,9 @@ function LeadsPage() {
       return matchesSearch && matchesStatus && matchesCat;
     });
     return rows.sort((a, b) => {
+      if (sortKey === "lead_score") {
+        return ((a.lead_score ?? -1) - (b.lead_score ?? -1)) * (sortAsc ? 1 : -1);
+      }
       const av = String(a[sortKey] ?? "").toLowerCase();
       const bv = String(b[sortKey] ?? "").toLowerCase();
       return (av < bv ? -1 : av > bv ? 1 : 0) * (sortAsc ? 1 : -1);
