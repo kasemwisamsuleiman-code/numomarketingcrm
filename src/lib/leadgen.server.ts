@@ -149,7 +149,7 @@ export async function qualifyCandidates(
   if (candidates.length === 0) return { qualified: [], rejected: 0 };
   const out = await callAi(
     "You qualify outbound leads for Numo Marketing, a small agency selling websites, local SEO and reactivation campaigns to small local businesses. Reject national chains, franchises, big-box retailers and businesses that clearly do not need marketing help. Favour small, family-owned, owner-operated businesses.",
-    `Target search: ${category} in ${location}.\n\nQualify these candidates. For each KEPT lead return a lead_score 0-100 (fit + reachability + likely need), a personalized_line that is a natural, human, non-salesy opening under 30 words referencing something specific about the business, and outreach_channel: SMS if only a mobile-style phone exists, EMAIL if an email exists, CALL otherwise. Put a one-line qualification rationale in notes. Drop chains and poor fits entirely.\n\nCandidates JSON:\n${JSON.stringify(candidates).slice(0, 60000)}`,
+    `Target search: ${category} in ${location}.\n\nQualify these candidates. For each KEPT lead return a lead_score 0-100 (fit + reachability + likely need), a personalized_line that is a natural, human, non-salesy opening under 30 words referencing something specific about the business, and outreach_channel: SMS if only a mobile-style phone exists, EMAIL if an email exists, CALL otherwise. Never invent partial or placeholder contact details — omit a phone/email entirely if you do not have the full real value. Put a one-line qualification rationale in notes. Drop chains and poor fits entirely.\n\nCandidates JSON:\n${JSON.stringify(candidates).slice(0, 60000)}`,
     {
       name: "return_qualified",
       description: "Return qualified leads",
@@ -197,8 +197,8 @@ export async function qualifyCandidates(
       business_name: name,
       category: str(l["category"]) ?? category,
       location: str(l["location"]) ?? location,
-      phone: str(l["phone"]),
-      email: str(l["email"]),
+      phone: cleanPhone(str(l["phone"])),
+      email: cleanEmail(str(l["email"])),
       website: str(l["website"]),
       business_hours: str(l["business_hours"]),
       personalized_line: line,
@@ -220,6 +220,25 @@ export function normalizeName(value: string) {
 function str(value: unknown): string | null {
   const s = typeof value === "string" ? value.trim() : "";
   return s.length > 0 ? s : null;
+}
+
+/** Reject partial/placeholder phone numbers such as "905-528-null". */
+function cleanPhone(value: string | null) {
+  if (!value) return null;
+  const lower = value.toLowerCase();
+  if (lower.includes("null") || lower.includes("x") || lower.includes("?")) return null;
+  const digits = value.replace(/\D/g, "");
+  if (digits.length < 10) return null;
+  if (/^(\d)\1+$/.test(digits)) return null;
+  return value.trim();
+}
+
+function cleanEmail(value: string | null) {
+  if (!value) return null;
+  const email = value.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(email)) return null;
+  if (email.includes("null") || email.includes("example.com")) return null;
+  return email;
 }
 
 function clampScore(value: number) {
