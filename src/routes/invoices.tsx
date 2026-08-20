@@ -20,7 +20,6 @@ import {
 } from "@/lib/crm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -622,9 +621,9 @@ function Row({ label, value, strong, light }: { label: string; value: string; st
 
 function F({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid gap-2">
-      <Label className="text-xs uppercase tracking-[0.12em] text-muted-foreground">{label}</Label>
+    <label className="grid gap-2">
+      <span className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{label}</span>
       {children}
-    </div>
+    </label>
   );
 }
