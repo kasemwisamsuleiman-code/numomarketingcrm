@@ -134,7 +134,7 @@ export const generateLeads = createServerFn({ method: "POST" })
         status: "COMPLETED",
       });
 
-      return { created, duplicates, rejected, source, leads: insertedLeads };
+      return { created, duplicates, rejected, source, provider, sourcing: usedApify ? "APIFY" : "AI SOURCED", leads: insertedLeads };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Lead generation failed.";
       await supabase.from("lead_gen_runs").insert({
