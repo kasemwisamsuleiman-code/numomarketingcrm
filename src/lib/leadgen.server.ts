@@ -65,19 +65,36 @@ async function callAi(system: string, user: string, tool: { name: string; descri
   return JSON.parse(args) as Record<string, unknown>;
 }
 
+/** True when a server-side Apify credential exists (direct token or Lovable connector). */
 export function hasApify() {
-  return Boolean(process.env["APIFY_API_TOKEN"]);
+  return Boolean(process.env["APIFY_API_TOKEN"]) || Boolean(process.env["APIFY_API_KEY"] && process.env["LOVABLE_API_KEY"]);
 }
 
-/** Stage 1a — real Google Maps scraping through Apify. */
+const APIFY_PATH = "/acts/compass~crawler-google-places/run-sync-get-dataset-items";
+
+/** Stage 1a — real Google Maps scraping through Apify (secret stays server-side). */
 export async function scrapeWithApify(category: string, location: string, count: number): Promise<RawCandidate[]> {
-  const token = process.env["APIFY_API_TOKEN"]!;
-  const res = await fetch(
-    `https://api.apify.com/v2/acts/compass~crawler-google-places/run-sync-get-dataset-items?token=${token}`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
+  const token = process.env["APIFY_API_TOKEN"];
+  const connectionKey = process.env["APIFY_API_KEY"];
+  const lovableKey = process.env["LOVABLE_API_KEY"];
+
+  const url = token
+    ? `https://api.apify.com/v2${APIFY_PATH}`
+    : `https://connector-gateway.lovable.dev/apify${APIFY_PATH}`;
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (token) {
+    headers["authorization"] = `Bearer ${token}`;
+  } else if (connectionKey && lovableKey) {
+    headers["authorization"] = `Bearer ${lovableKey}`;
+    headers["x-connection-api-key"] = connectionKey;
+  } else {
+    throw new Error("Apify is not connected for this workspace.");
+  }
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
         searchStringsArray: [`${category} in ${location}`],
         maxCrawledPlacesPerSearch: count,
         language: "en",
