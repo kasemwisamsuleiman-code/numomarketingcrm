@@ -96,28 +96,40 @@ export function hasApify() {
   return Boolean(process.env["APIFY_API_TOKEN"]) || Boolean(process.env["APIFY_API_KEY"] && process.env["LOVABLE_API_KEY"]);
 }
 
-const APIFY_PATH = "/acts/compass~crawler-google-places/run-sync-get-dataset-items";
+const APIFY_ACTOR = "compass~crawler-google-places";
 
-/** Stage 1a — real Google Maps scraping through Apify (secret stays server-side). */
-export async function scrapeWithApify(category: string, location: string, count: number): Promise<RawCandidate[]> {
+/** Base URL + auth headers for Apify, via direct token or the Lovable connector gateway. */
+function apifyRequestConfig() {
   const token = process.env["APIFY_API_TOKEN"];
   const connectionKey = process.env["APIFY_API_KEY"];
   const lovableKey = process.env["LOVABLE_API_KEY"];
 
-  const url = token
-    ? `https://api.apify.com/v2${APIFY_PATH}`
-    : `https://connector-gateway.lovable.dev/apify${APIFY_PATH}`;
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (token) {
     headers["authorization"] = `Bearer ${token}`;
-  } else if (connectionKey && lovableKey) {
+    return { base: "https://api.apify.com/v2", headers };
+  }
+  if (connectionKey && lovableKey) {
     headers["authorization"] = `Bearer ${lovableKey}`;
     headers["x-connection-api-key"] = connectionKey;
-  } else {
-    throw new Error("Apify is not connected for this workspace.");
+    return { base: "https://connector-gateway.lovable.dev/apify", headers };
   }
+  throw new Error("Apify is not connected for this workspace.");
+}
 
-  const res = await fetch(url, {
+const WAIT_SECONDS = 50; // stay under the 60s gateway/proxy request limit
+const MAX_WAIT_MS = 5 * 60 * 1000;
+
+/**
+ * Stage 1a — real Google Maps scraping through Apify (secret stays server-side).
+ * Uses the ASYNC run API and polls: the synchronous endpoint keeps one HTTP
+ * request open for the whole crawl, which the connector gateway kills at 60s
+ * with a 502 for anything larger than a couple of places.
+ */
+export async function scrapeWithApify(category: string, location: string, count: number): Promise<RawCandidate[]> {
+  const { base, headers } = apifyRequestConfig();
+
+  const startRes = await fetch(`${base}/acts/${APIFY_ACTOR}/runs?waitForFinish=${WAIT_SECONDS}`, {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -131,12 +143,43 @@ export async function scrapeWithApify(category: string, location: string, count:
     }),
   });
 
-  if (!res.ok) {
-    const body = await res.text();
-    console.error(`Apify scrape failed [${res.status}]: ${body.slice(0, 500)}`);
-    throw new Error(`Apify scrape failed (${res.status})`);
+  if (!startRes.ok) {
+    const body = await startRes.text();
+    console.error(`Apify run start failed [${startRes.status}]: ${body.slice(0, 500)}`);
+    throw new Error(`Apify scrape failed (${startRes.status})`);
   }
-  const items = (await res.json()) as Array<Record<string, any>>;
+
+  let run = ((await startRes.json()) as { data?: Record<string, any> }).data;
+  const runId = run?.["id"];
+  if (!runId) throw new Error("Apify did not return a run id.");
+
+  const deadline = Date.now() + MAX_WAIT_MS;
+  while (run && ["READY", "RUNNING"].includes(String(run["status"])) && Date.now() < deadline) {
+    const pollRes = await fetch(`${base}/actor-runs/${runId}?waitForFinish=${WAIT_SECONDS}`, { headers });
+    if (!pollRes.ok) {
+      const body = await pollRes.text();
+      console.error(`Apify run poll failed [${pollRes.status}]: ${body.slice(0, 500)}`);
+      throw new Error(`Apify scrape failed (${pollRes.status})`);
+    }
+    run = ((await pollRes.json()) as { data?: Record<string, any> }).data;
+  }
+
+  const status = String(run?.["status"] ?? "UNKNOWN");
+  const datasetId = run?.["defaultDatasetId"];
+  if (status !== "SUCCEEDED" && status !== "TIMING-OUT") {
+    if (status === "READY" || status === "RUNNING") throw new Error("Apify scrape timed out — try a smaller batch.");
+    throw new Error(`Apify scrape did not complete (${status}).`);
+  }
+  if (!datasetId) throw new Error("Apify returned no dataset for this run.");
+
+  const itemsRes = await fetch(`${base}/datasets/${datasetId}/items?clean=true&limit=${Math.max(1, count)}`, { headers });
+  if (!itemsRes.ok) {
+    const body = await itemsRes.text();
+    console.error(`Apify dataset fetch failed [${itemsRes.status}]: ${body.slice(0, 500)}`);
+    throw new Error(`Apify scrape failed (${itemsRes.status})`);
+  }
+  const items = (await itemsRes.json()) as Array<Record<string, any>>;
+
   return items.map((i) => ({
     business_name: String(i["title"] ?? "").trim(),
     category: i["categoryName"] ?? category,
