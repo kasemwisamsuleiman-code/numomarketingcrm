@@ -109,16 +109,22 @@ function AuthPage() {
             Continue with Google
           </Button>
 
-          <p className="mt-5 text-center text-sm text-muted-foreground">
-            {mode === "signin" ? "New to Numo?" : "Already have an account?"}{" "}
-            <button
-              type="button"
-              className="font-semibold text-foreground underline underline-offset-4"
-              onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-            >
-              {mode === "signin" ? "Create an account" : "Sign in"}
-            </button>
-          </p>
+          {SIGNUPS_OPEN ? (
+            <p className="mt-5 text-center text-sm text-muted-foreground">
+              {mode === "signin" ? "New to Numo?" : "Already have an account?"}{" "}
+              <button
+                type="button"
+                className="font-semibold text-foreground underline underline-offset-4"
+                onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
+              >
+                {mode === "signin" ? "Create an account" : "Sign in"}
+              </button>
+            </p>
+          ) : (
+            <p className="mt-5 text-center text-xs text-muted-foreground">
+              Private workspace — accounts are created by the Numo administrator.
+            </p>
+          )}
         </div>
       </div>
     </div>
