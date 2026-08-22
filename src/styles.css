@@ -166,3 +166,89 @@
   border-radius: var(--radius-2xl);
   box-shadow: var(--shadow-ink);
 }
+
+/* ---- Invoice-only print output -------------------------------------- */
+@media print {
+  @page {
+    size: Letter;
+    margin: 0.6in;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Hide everything, then reveal only the invoice document. */
+  body * {
+    visibility: hidden !important;
+  }
+
+  #invoice-print-area,
+  #invoice-print-area * {
+    visibility: visible !important;
+  }
+
+  .no-print,
+  .no-print * {
+    display: none !important;
+  }
+
+  /* Neutralize dialog overlay/positioning so the document flows on paper. */
+  [data-slot="dialog-overlay"] {
+    display: none !important;
+  }
+
+  .invoice-print-shell {
+    position: static !important;
+    display: block !important;
+    max-height: none !important;
+    overflow: visible !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    gap: 0 !important;
+  }
+
+  #invoice-print-area {
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #111 !important;
+    font-size: 12pt;
+    line-height: 1.45;
+  }
+
+  #invoice-print-area table {
+    width: 100% !important;
+    border-collapse: collapse;
+  }
+
+  #invoice-print-area thead {
+    display: table-header-group;
+  }
+
+  #invoice-print-area tr,
+  #invoice-print-area td,
+  #invoice-print-area th {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  #invoice-print-area td,
+  #invoice-print-area th {
+    padding: 6pt 4pt !important;
+  }
+}
