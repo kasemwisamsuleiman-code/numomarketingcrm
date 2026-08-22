@@ -76,6 +76,11 @@ const MODULES: Module[] = [
 
 function SettingsPage() {
   const { user } = useAuth();
+  const { data: status } = useQuery({
+    queryKey: ["leadgen-status"],
+    queryFn: () => getLeadGenStatus(),
+  });
+
 
   return (
     <AppShell
