@@ -38,7 +38,20 @@ export type QualifiedLead = {
 const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-3-flash-preview";
 
-async function callAi(system: string, user: string, tool: { name: string; description: string; parameters: unknown }) {
+export type AiProvider = "OPENAI" | "LOVABLE AI";
+
+/** Production AI provider: the workspace's own OpenAI key when configured. */
+export function aiProvider(): AiProvider | null {
+  if (process.env["OPENAI_API_KEY"]) return "OPENAI";
+  if (process.env["LOVABLE_API_KEY"]) return "LOVABLE AI";
+  return null;
+}
+
+async function callLovableAi(
+  system: string,
+  user: string,
+  tool: { name: string; description: string; parameters: unknown },
+) {
   const key = process.env["LOVABLE_API_KEY"];
   if (!key) throw new Error("AI is not configured for this workspace.");
   const res = await fetch(AI_URL, {
@@ -64,6 +77,19 @@ async function callAi(system: string, user: string, tool: { name: string; descri
   if (!args) throw new Error("AI returned an unexpected response.");
   return JSON.parse(args) as Record<string, unknown>;
 }
+
+/**
+ * Production AI call. Routes to the user's own OpenAI key when present,
+ * otherwise the Lovable AI gateway. Never logs or returns the key.
+ */
+async function callAi(system: string, user: string, tool: { name: string; description: string; parameters: unknown }) {
+  if (process.env["OPENAI_API_KEY"]) {
+    const { callOpenAi } = await import("./openai.server");
+    return callOpenAi(system, user, tool);
+  }
+  return callLovableAi(system, user, tool);
+}
+
 
 /** True when a server-side Apify credential exists (direct token or Lovable connector). */
 export function hasApify() {
