@@ -561,13 +561,13 @@ function InvoicesPage() {
       </Dialog>
 
       <Dialog open={!!preview} onOpenChange={(v) => !v && setPreview(null)}>
-        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="invoice-print-shell max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader className="no-print">
             <DialogTitle className="font-display text-2xl">Invoice Preview</DialogTitle>
             <DialogDescription>Print or save as PDF. Email sending can be added later.</DialogDescription>
           </DialogHeader>
           {preview ? (
-            <div className="panel p-6">
+            <div id="invoice-print-area" className="panel invoice-doc p-6">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="font-display text-xl font-semibold">NUMO MARKETING</p>
@@ -612,10 +612,18 @@ function InvoicesPage() {
                 <Row label="Total" value={money(Number(preview.total))} strong light />
                 <Row label="Balance Due" value={money(Number(preview.balance))} strong light />
               </div>
-              {preview.notes ? <p className="mt-6 text-sm text-muted-foreground">{preview.notes}</p> : null}
+              {preview.notes ? (
+                <div className="mt-6 text-sm">
+                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Notes &amp; payment terms</p>
+                  <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{preview.notes}</p>
+                </div>
+              ) : null}
+              <p className="mt-8 text-center text-xs text-muted-foreground">
+                Thank you for working with Numo Marketing.
+              </p>
             </div>
           ) : null}
-          <DialogFooter>
+          <DialogFooter className="no-print">
             <Button variant="outline" className="rounded-full" disabled title="Email sending coming soon">
               <Mail className="mr-1 size-4" /> Email invoice
             </Button>
@@ -623,7 +631,7 @@ function InvoicesPage() {
               className="rounded-full bg-ink text-ink-foreground hover:bg-ink/90"
               onClick={() => window.print()}
             >
-              <Printer className="mr-1 size-4" /> Print / Save PDF
+              <Printer className="mr-1 size-4" /> Download / Print PDF
             </Button>
           </DialogFooter>
         </DialogContent>
