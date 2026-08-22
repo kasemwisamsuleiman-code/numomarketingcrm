@@ -6,6 +6,8 @@ import { AppShell } from "@/components/crm/AppShell";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
+import { getLeadGenStatus } from "@/lib/leadgen.functions";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
