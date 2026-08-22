@@ -95,14 +95,17 @@ export async function scrapeWithApify(category: string, location: string, count:
     method: "POST",
     headers,
     body: JSON.stringify({
-        searchStringsArray: [`${category} in ${location}`],
-        maxCrawledPlacesPerSearch: count,
-        language: "en",
-        scrapeContacts: true,
-      }),
-    },
-  );
-  if (!res.ok) throw new Error(`Apify scrape failed (${res.status})`);
+      searchStringsArray: [`${category} in ${location}`],
+      maxCrawledPlacesPerSearch: count,
+      language: "en",
+      scrapeContacts: true,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    console.error(`Apify scrape failed [${res.status}]: ${body.slice(0, 500)}`);
+    throw new Error(`Apify scrape failed (${res.status})`);
+  }
   const items = (await res.json()) as Array<Record<string, any>>;
   return items.map((i) => ({
     business_name: String(i["title"] ?? "").trim(),
