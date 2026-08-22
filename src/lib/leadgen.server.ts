@@ -121,12 +121,16 @@ export async function scrapeWithApify(category: string, location: string, count:
     method: "POST",
     headers,
     body: JSON.stringify({
-      searchStringsArray: [`${category} in ${location}`],
+      // Constrain the crawl geographically instead of relying on the free-text
+      // search string alone — otherwise Google Maps can return out-of-region places.
+      searchStringsArray: [category],
+      locationQuery: location,
       maxCrawledPlacesPerSearch: count,
       language: "en",
       scrapeContacts: true,
     }),
   });
+
   if (!res.ok) {
     const body = await res.text();
     console.error(`Apify scrape failed [${res.status}]: ${body.slice(0, 500)}`);
@@ -263,10 +267,85 @@ export function normalizeName(value: string) {
     .trim();
 }
 
+/** US state name <-> USPS abbreviation, used for defensive region checking. */
+const US_STATES: Record<string, string> = {
+  alabama: "al", alaska: "ak", arizona: "az", arkansas: "ar", california: "ca", colorado: "co",
+  connecticut: "ct", delaware: "de", florida: "fl", georgia: "ga", hawaii: "hi", idaho: "id",
+  illinois: "il", indiana: "in", iowa: "ia", kansas: "ks", kentucky: "ky", louisiana: "la",
+  maine: "me", maryland: "md", massachusetts: "ma", michigan: "mi", minnesota: "mn",
+  mississippi: "ms", missouri: "mo", montana: "mt", nebraska: "ne", nevada: "nv",
+  "new hampshire": "nh", "new jersey": "nj", "new mexico": "nm", "new york": "ny",
+  "north carolina": "nc", "north dakota": "nd", ohio: "oh", oklahoma: "ok", oregon: "or",
+  pennsylvania: "pa", "rhode island": "ri", "south carolina": "sc", "south dakota": "sd",
+  tennessee: "tn", texas: "tx", utah: "ut", vermont: "vt", virginia: "va", washington: "wa",
+  "west virginia": "wv", wisconsin: "wi", wyoming: "wy", "district of columbia": "dc",
+};
+
+function tokens(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+/**
+ * Defensive region check: true when the candidate address plausibly sits inside the
+ * requested location. Returns true when we cannot tell (no address / unknown region)
+ * so we never silently discard valid data — only clearly out-of-region rows are cut.
+ */
+export function matchesLocation(candidateLocation: string | null | undefined, requested: string) {
+  const addr = (candidateLocation ?? "").toLowerCase().trim();
+  if (!addr) return true;
+
+  const parts = requested
+    .toLowerCase()
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  for (const part of parts) {
+    // Region term: match either the full state name or its abbreviation as a word.
+    const abbr = US_STATES[part];
+    const nameFromAbbr = Object.keys(US_STATES).find((k) => US_STATES[k] === part);
+    const variants = [part, abbr, nameFromAbbr].filter(Boolean) as string[];
+    if (variants.some((v) => new RegExp(`(^|[^a-z])${v.replace(/\s+/g, "\\s+")}([^a-z]|$)`, "i").test(addr))) {
+      return true;
+    }
+  }
+
+  // If the requested location names a US state and the address names a *different*
+  // US state, it is clearly out of region.
+  const requestedStates = parts.filter((p) => p in US_STATES || Object.values(US_STATES).includes(p));
+  if (requestedStates.length > 0) {
+    const addrTokens = tokens(addr);
+    const addrStates = new Set<string>();
+    for (const t of addrTokens) {
+      if (t in US_STATES) addrStates.add(US_STATES[t]!);
+      else if (Object.values(US_STATES).includes(t)) addrStates.add(t);
+    }
+    // multi-word state names
+    for (const name of Object.keys(US_STATES)) {
+      if (name.includes(" ") && addr.includes(name)) addrStates.add(US_STATES[name]!);
+    }
+    const wanted = new Set(requestedStates.map((p) => (p in US_STATES ? US_STATES[p]! : p)));
+    if (addrStates.size > 0 && ![...addrStates].some((s) => wanted.has(s))) return false;
+    // Address has a recognizable US shape but no state we could read -> allow.
+    return addrStates.size === 0;
+  }
+
+  // Non-state (city/region/country) request: require a token overlap with the address.
+  const requestedTokens = tokens(requested).filter((t) => t.length > 2);
+  if (requestedTokens.length === 0) return true;
+  const addrText = ` ${tokens(addr).join(" ")} `;
+  return requestedTokens.some((t) => addrText.includes(` ${t} `));
+}
+
 function str(value: unknown): string | null {
   const s = typeof value === "string" ? value.trim() : "";
   return s.length > 0 ? s : null;
 }
+
 
 /** Reject partial/placeholder phone numbers such as "905-528-null". */
 function cleanPhone(value: string | null) {
