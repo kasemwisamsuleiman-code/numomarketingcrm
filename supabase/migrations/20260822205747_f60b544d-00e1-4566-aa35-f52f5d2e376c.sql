@@ -1,0 +1,15 @@
+REVOKE ALL ON public.leads FROM anon;
+REVOKE ALL ON public.clients FROM anon;
+REVOKE ALL ON public.meetings FROM anon;
+REVOKE ALL ON public.invoices FROM anon;
+REVOKE ALL ON public.lead_gen_runs FROM anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.leads TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.clients TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.meetings TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.invoices TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.lead_gen_runs TO authenticated;
+GRANT ALL ON public.leads TO service_role;
+GRANT ALL ON public.clients TO service_role;
+GRANT ALL ON public.meetings TO service_role;
+GRANT ALL ON public.invoices TO service_role;
+GRANT ALL ON public.lead_gen_runs TO service_role;
