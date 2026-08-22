@@ -561,13 +561,13 @@ function InvoicesPage() {
       </Dialog>
 
       <Dialog open={!!preview} onOpenChange={(v) => !v && setPreview(null)}>
-        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="invoice-print-shell max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader className="no-print">
             <DialogTitle className="font-display text-2xl">Invoice Preview</DialogTitle>
             <DialogDescription>Print or save as PDF. Email sending can be added later.</DialogDescription>
           </DialogHeader>
           {preview ? (
-            <div className="panel p-6">
+            <div id="invoice-print-area" className="panel invoice-doc p-6">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="font-display text-xl font-semibold">NUMO MARKETING</p>
