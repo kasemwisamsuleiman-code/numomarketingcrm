@@ -22,6 +22,10 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
+// Private team-only CRM: self-serve signup is disabled in the backend too.
+// Flip to true only if public registration is ever intended.
+const SIGNUPS_OPEN = false;
+
 function AuthPage() {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
