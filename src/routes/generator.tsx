@@ -256,13 +256,15 @@ function GeneratorPage() {
               </li>
               <li className="flex items-center gap-3">
                 <Bot className="size-4 text-gold" />
-                <span className="flex-1">AI qualification</span>
-                <Badge ok={Boolean(status?.aiConnected)}>{status?.aiConnected ? "Active" : "Offline"}</Badge>
+                <span className="flex-1">AI qualification · {status?.aiProvider ?? "—"}</span>
+                <Badge ok={Boolean(status?.aiProvider)}>{status?.aiProvider ? "Active" : "Offline"}</Badge>
               </li>
             </ul>
             <p className="mt-3 text-xs text-muted-foreground">
-              Without an Apify key Numo sources candidates with AI and still qualifies, scores and personalizes them.
+              Qualification, scoring, personalized lines and outreach channel run on your own OpenAI key when it is
+              configured. Each run records the exact provider pair in its history row.
             </p>
+
           </div>
         </div>
       </section>

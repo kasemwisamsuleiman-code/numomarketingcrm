@@ -16,15 +16,17 @@ export type GeneratedLead = {
 export const getLeadGenStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
-    const { hasApify } = await import("./leadgen.server");
+    const { hasApify, aiProvider } = await import("./leadgen.server");
     const { hasOpenAi } = await import("./openai.server");
     return {
       apifyConnected: hasApify(),
-      aiConnected: Boolean(process.env["LOVABLE_API_KEY"]),
-      // Prepared only: production generation still runs on the Lovable AI path.
+      aiConnected: Boolean(process.env["LOVABLE_API_KEY"]) || hasOpenAi(),
       openaiConfigured: hasOpenAi(),
+      // Provider that production lead qualification will actually use.
+      aiProvider: aiProvider(),
     };
   });
+
 
 /** Free readiness check for the user-supplied OpenAI key (no paid completion). */
 export const verifyOpenAiConnection = createServerFn({ method: "POST" })
@@ -50,12 +52,15 @@ export const generateLeads = createServerFn({ method: "POST" })
   })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const { hasApify, scrapeWithApify, draftCandidates, qualifyCandidates, normalizeName } = await import(
+    const { hasApify, scrapeWithApify, draftCandidates, qualifyCandidates, normalizeName, aiProvider } = await import(
       "./leadgen.server"
     );
 
     const usedApify = hasApify();
-    const source = usedApify ? "APIFY + AI" : "AI SOURCED";
+    const provider = aiProvider();
+    if (!provider) throw new Error("No AI provider is configured — add OPENAI_API_KEY to enable lead qualification.");
+    const source = `${usedApify ? "APIFY" : "AI SOURCED"} + ${provider}`;
+
 
     let created = 0;
     let duplicates = 0;
@@ -131,7 +136,7 @@ export const generateLeads = createServerFn({ method: "POST" })
         status: "COMPLETED",
       });
 
-      return { created, duplicates, rejected, source, leads: insertedLeads };
+      return { created, duplicates, rejected, source, provider, sourcing: usedApify ? "APIFY" : "AI SOURCED", leads: insertedLeads };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Lead generation failed.";
       await supabase.from("lead_gen_runs").insert({
