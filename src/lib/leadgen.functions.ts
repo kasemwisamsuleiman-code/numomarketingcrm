@@ -52,9 +52,9 @@ export const generateLeads = createServerFn({ method: "POST" })
   })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const { hasApify, scrapeWithApify, draftCandidates, qualifyCandidates, normalizeName, aiProvider } = await import(
-      "./leadgen.server"
-    );
+    const { hasApify, scrapeWithApify, draftCandidates, qualifyCandidates, normalizeName, aiProvider, matchesLocation } =
+      await import("./leadgen.server");
+
 
     const usedApify = hasApify();
     const provider = aiProvider();
