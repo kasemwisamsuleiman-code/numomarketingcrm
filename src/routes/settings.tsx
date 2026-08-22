@@ -113,6 +113,40 @@ function SettingsPage() {
         </dl>
       </section>
 
+      <section className="panel mt-8 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-display text-lg font-semibold">Lead sourcing credentials</h2>
+          <div className="flex gap-2">
+            <Badge
+              variant="outline"
+              className={
+                status?.apifyConnected
+                  ? "border-gold/50 bg-gold-soft text-gold-foreground"
+                  : "border-border bg-muted text-muted-foreground"
+              }
+            >
+              Apify {status?.apifyConnected ? "connected" : "not connected"}
+            </Badge>
+            <Badge
+              variant="outline"
+              className={
+                status?.aiConnected
+                  ? "border-gold/50 bg-gold-soft text-gold-foreground"
+                  : "border-border bg-muted text-muted-foreground"
+              }
+            >
+              AI {status?.aiConnected ? "connected" : "not connected"}
+            </Badge>
+          </div>
+        </div>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Add your Apify API token privately in <span className="font-medium text-foreground">Project Settings → Secrets</span>{" "}
+          using the name <code className="rounded bg-muted px-1.5 py-0.5 text-xs">APIFY_API_TOKEN</code>. The token is stored
+          server-side only — it is never sent to the browser, logged, or shown here. Once saved, the Lead Generator switches
+          from AI-sourced candidates to live Google Maps scraping automatically.
+        </p>
+      </section>
+
       <section className="mt-8">
         <div className="mb-3 flex items-center gap-2">
           <Plug className="size-4 text-muted-foreground" />
