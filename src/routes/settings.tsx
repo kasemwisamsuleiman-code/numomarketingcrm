@@ -156,11 +156,13 @@ function SettingsPage() {
           from AI-sourced candidates to live Google Maps scraping automatically.
         </p>
         <p className="mt-3 text-sm text-muted-foreground">
-          To use your own OpenAI account, add a secret named{" "}
-          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">OPENAI_API_KEY</code> in the same place. The backend is
-          prepared to read it server-side, but lead generation still runs on the current AI path until you ask to switch — no
-          OpenAI charges are incurred by simply saving the key.
+          Lead qualification, scoring, personalized lines and outreach channel now run on your own OpenAI key via the
+          secret named <code className="rounded bg-muted px-1.5 py-0.5 text-xs">OPENAI_API_KEY</code>. It is read
+          server-side only. Active AI provider:{" "}
+          <span className="font-medium text-foreground">{status?.aiProvider ?? "none configured"}</span>. If the key is
+          removed, generation falls back to the managed AI provider rather than inventing leads.
         </p>
+
       </section>
 
       <section className="mt-8">
