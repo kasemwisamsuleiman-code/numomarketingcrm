@@ -121,12 +121,16 @@ export async function scrapeWithApify(category: string, location: string, count:
     method: "POST",
     headers,
     body: JSON.stringify({
-      searchStringsArray: [`${category} in ${location}`],
+      // Constrain the crawl geographically instead of relying on the free-text
+      // search string alone — otherwise Google Maps can return out-of-region places.
+      searchStringsArray: [category],
+      locationQuery: location,
       maxCrawledPlacesPerSearch: count,
       language: "en",
       scrapeContacts: true,
     }),
   });
+
   if (!res.ok) {
     const body = await res.text();
     console.error(`Apify scrape failed [${res.status}]: ${body.slice(0, 500)}`);
