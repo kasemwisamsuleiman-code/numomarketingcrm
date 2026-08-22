@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Pencil, Trash2, Printer, Mail } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Printer, Mail, Download } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,6 +10,8 @@ import { AppShell, EmptyState, TableShell } from "@/components/crm/AppShell";
 import { KpiCard } from "@/components/crm/KpiCard";
 import { StatusPill } from "@/components/crm/StatusPill";
 import { InvoiceAiAssist } from "@/components/crm/InvoiceAiAssist";
+import { downloadInvoicePdf } from "@/lib/invoice-pdf";
+
 
 import {
   INVOICE_STATUSES,
@@ -627,13 +629,21 @@ function InvoicesPage() {
             <Button variant="outline" className="rounded-full" disabled title="Email sending coming soon">
               <Mail className="mr-1 size-4" /> Email invoice
             </Button>
+            <Button variant="outline" className="rounded-full" onClick={() => window.print()}>
+              <Printer className="mr-1 size-4" /> Print
+            </Button>
             <Button
               className="rounded-full bg-ink text-ink-foreground hover:bg-ink/90"
-              onClick={() => window.print()}
+              onClick={() => {
+                if (!preview) return;
+                downloadInvoicePdf(preview);
+                toast.success(`${preview.invoice_number}.pdf downloaded`);
+              }}
             >
-              <Printer className="mr-1 size-4" /> Download / Print PDF
+              <Download className="mr-1 size-4" /> Download PDF
             </Button>
           </DialogFooter>
+
         </DialogContent>
       </Dialog>
     </AppShell>
