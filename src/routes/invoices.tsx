@@ -9,6 +9,8 @@ import { RequireAuth } from "@/components/crm/RequireAuth";
 import { AppShell, EmptyState, TableShell } from "@/components/crm/AppShell";
 import { KpiCard } from "@/components/crm/KpiCard";
 import { StatusPill } from "@/components/crm/StatusPill";
+import { InvoiceAiAssist } from "@/components/crm/InvoiceAiAssist";
+
 import {
   INVOICE_STATUSES,
   computeInvoiceTotals,
@@ -518,9 +520,29 @@ function InvoicesPage() {
                 </div>
               </div>
 
+              <InvoiceAiAssist
+                onApplyDescription={(text) => {
+                  setForm((prev) => {
+                    if (!prev) return prev;
+                    const items = [...prev.line_items];
+                    const emptyIdx = items.findIndex((it) => !it.description.trim());
+                    // Only wording is set — quantity and rate stay with the user.
+                    if (emptyIdx >= 0) items[emptyIdx] = { ...items[emptyIdx]!, description: text };
+                    else items.push({ ...blankItem, description: text });
+                    return { ...prev, line_items: items };
+                  });
+                }}
+                onApplyNotes={(text) => {
+                  setForm((prev) =>
+                    prev ? { ...prev, notes: prev.notes.trim() ? `${prev.notes.trim()}\n${text}` : text } : prev,
+                  );
+                }}
+              />
+
               <F label="Notes / Payment Terms">
                 <Textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
               </F>
+
             </div>
           ) : null}
           <DialogFooter>
