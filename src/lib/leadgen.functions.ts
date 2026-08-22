@@ -16,15 +16,17 @@ export type GeneratedLead = {
 export const getLeadGenStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
-    const { hasApify } = await import("./leadgen.server");
+    const { hasApify, aiProvider } = await import("./leadgen.server");
     const { hasOpenAi } = await import("./openai.server");
     return {
       apifyConnected: hasApify(),
-      aiConnected: Boolean(process.env["LOVABLE_API_KEY"]),
-      // Prepared only: production generation still runs on the Lovable AI path.
+      aiConnected: Boolean(process.env["LOVABLE_API_KEY"]) || hasOpenAi(),
       openaiConfigured: hasOpenAi(),
+      // Provider that production lead qualification will actually use.
+      aiProvider: aiProvider(),
     };
   });
+
 
 /** Free readiness check for the user-supplied OpenAI key (no paid completion). */
 export const verifyOpenAiConnection = createServerFn({ method: "POST" })
