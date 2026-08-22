@@ -68,12 +68,26 @@ export const generateLeads = createServerFn({ method: "POST" })
     let insertedLeads: GeneratedLead[] = [];
 
     try {
-      const candidates = usedApify
+      const sourced = usedApify
         ? await scrapeWithApify(data.category, data.location, data.count)
         : await draftCandidates(data.category, data.location, data.count);
 
-      const { qualified, rejected: dropped } = await qualifyCandidates(candidates, data.category, data.location);
-      rejected = dropped;
+      // Defensive geo guard: drop clearly out-of-region candidates before qualification.
+      const candidates = sourced.filter((c) => matchesLocation(c.location, data.location));
+      let offRegion = sourced.length - candidates.length;
+
+      const { qualified: qualifiedRaw, rejected: dropped } = await qualifyCandidates(
+        candidates,
+        data.category,
+        data.location,
+      );
+      // Second guard in case the model rewrites/hallucinates an address.
+      const qualified = qualifiedRaw.filter((lead) => {
+        if (matchesLocation(lead.location, data.location)) return true;
+        offRegion += 1;
+        return false;
+      });
+      rejected = dropped + offRegion;
 
       const { data: existing, error: existingError } = await supabase.from("leads").select("business_name");
       if (existingError) throw new Error(existingError.message);
@@ -89,6 +103,7 @@ export const generateLeads = createServerFn({ method: "POST" })
           seen.add(key);
           return true;
         })
+
         .slice(0, data.count)
         .map((lead) => ({
           user_id: userId,
