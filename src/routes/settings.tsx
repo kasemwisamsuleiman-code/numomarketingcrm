@@ -137,6 +137,16 @@ function SettingsPage() {
             >
               AI {status?.aiConnected ? "connected" : "not connected"}
             </Badge>
+            <Badge
+              variant="outline"
+              className={
+                status?.openaiConfigured
+                  ? "border-gold/50 bg-gold-soft text-gold-foreground"
+                  : "border-border bg-muted text-muted-foreground"
+              }
+            >
+              OpenAI key {status?.openaiConfigured ? "detected" : "not set"}
+            </Badge>
           </div>
         </div>
         <p className="mt-3 text-sm text-muted-foreground">
@@ -144,6 +154,12 @@ function SettingsPage() {
           using the name <code className="rounded bg-muted px-1.5 py-0.5 text-xs">APIFY_API_TOKEN</code>. The token is stored
           server-side only — it is never sent to the browser, logged, or shown here. Once saved, the Lead Generator switches
           from AI-sourced candidates to live Google Maps scraping automatically.
+        </p>
+        <p className="mt-3 text-sm text-muted-foreground">
+          To use your own OpenAI account, add a secret named{" "}
+          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">OPENAI_API_KEY</code> in the same place. The backend is
+          prepared to read it server-side, but lead generation still runs on the current AI path until you ask to switch — no
+          OpenAI charges are incurred by simply saving the key.
         </p>
       </section>
 
