@@ -50,12 +50,15 @@ export const generateLeads = createServerFn({ method: "POST" })
   })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const { hasApify, scrapeWithApify, draftCandidates, qualifyCandidates, normalizeName } = await import(
+    const { hasApify, scrapeWithApify, draftCandidates, qualifyCandidates, normalizeName, aiProvider } = await import(
       "./leadgen.server"
     );
 
     const usedApify = hasApify();
-    const source = usedApify ? "APIFY + AI" : "AI SOURCED";
+    const provider = aiProvider();
+    if (!provider) throw new Error("No AI provider is configured — add OPENAI_API_KEY to enable lead qualification.");
+    const source = `${usedApify ? "APIFY" : "AI SOURCED"} + ${provider}`;
+
 
     let created = 0;
     let duplicates = 0;
