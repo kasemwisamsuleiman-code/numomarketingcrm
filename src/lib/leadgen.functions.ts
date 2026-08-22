@@ -17,10 +17,25 @@ export const getLeadGenStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
     const { hasApify } = await import("./leadgen.server");
+    const { hasOpenAi } = await import("./openai.server");
     return {
       apifyConnected: hasApify(),
       aiConnected: Boolean(process.env["LOVABLE_API_KEY"]),
+      // Prepared only: production generation still runs on the Lovable AI path.
+      openaiConfigured: hasOpenAi(),
     };
+  });
+
+/** Free readiness check for the user-supplied OpenAI key (no paid completion). */
+export const verifyOpenAiConnection = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { verifyOpenAiKey } = await import("./openai.server");
+    const { ok, status } = await verifyOpenAiKey();
+    if (status === 0) return { ok: false, message: "No OPENAI_API_KEY secret is configured." };
+    if (ok) return { ok: true, message: "OpenAI key verified." };
+    if (status === 401) return { ok: false, message: "OpenAI rejected the configured key." };
+    return { ok: false, message: `OpenAI check failed (${status}).` };
   });
 
 export const generateLeads = createServerFn({ method: "POST" })
