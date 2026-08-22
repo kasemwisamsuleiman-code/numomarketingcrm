@@ -10,6 +10,8 @@ import { AppShell, EmptyState, TableShell } from "@/components/crm/AppShell";
 import { KpiCard } from "@/components/crm/KpiCard";
 import { StatusPill } from "@/components/crm/StatusPill";
 import { InvoiceAiAssist } from "@/components/crm/InvoiceAiAssist";
+import { downloadInvoicePdf } from "@/lib/invoice-pdf";
+
 
 import {
   INVOICE_STATUSES,
