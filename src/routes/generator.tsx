@@ -276,7 +276,7 @@ function GeneratorPage() {
           {generate.isPending || (activeRunId && activeRun?.status !== "COMPLETED" && activeRun?.status !== "FAILED") ? (
             <div className="mt-5 space-y-2 rounded-2xl border border-border bg-secondary/50 p-4 text-sm">
               <p className="font-semibold text-foreground">
-                Qualified {activeRun?.created_count ?? 0} of {activeRun?.requested ?? Number(count) || 0} target leads
+                Qualified {activeRun?.created_count ?? 0} of {activeRun?.requested ?? (Number(count) || 0)} target leads
                 {activeRun?.batch_count && activeRun.batch_count > 1 ? ` · sourcing round ${activeRun.batch_count}` : ""}
               </p>
               <p className="text-xs text-muted-foreground">
