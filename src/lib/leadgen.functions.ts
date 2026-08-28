@@ -40,26 +40,8 @@ export const verifyOpenAiConnection = createServerFn({ method: "POST" })
     return { ok: false, message: `OpenAI check failed (${status}).` };
   });
 
-/**
- * Sourcing safety caps. `requested` is the number of QUALIFIED leads the user
- * wants, so we deliberately over-source: many scraped businesses are filtered
- * out by location validation, OpenAI qualification or dedup.
- */
-const MAX_BATCHES = 4; // sourcing rounds per job
-const MAX_CRAWL_PER_BATCH = 80; // places Apify may crawl in one round
-const MAX_JOB_MS = 15 * 60 * 1000; // wall-clock budget for a whole job
+import { MAX_BATCHES, MAX_JOB_MS, maxTotalCrawl, nextCrawlLimit } from "./leadgen-limits";
 
-/** Total places a job may ever crawl, scaled to the target with a hard ceiling. */
-function maxTotalCrawl(target: number) {
-  return Math.min(200, Math.max(15, target * 6));
-}
-
-/** Cumulative crawl size for the next sourcing batch (~3x the leads still needed). */
-function nextCrawlLimit(target: number, accepted: number, currentLimit: number) {
-  const remaining = Math.max(0, target - accepted);
-  const want = currentLimit + Math.max(5, remaining * 3);
-  return Math.min(maxTotalCrawl(target), Math.max(currentLimit + 5, want), currentLimit + MAX_CRAWL_PER_BATCH);
-}
 
 export const generateLeads = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
