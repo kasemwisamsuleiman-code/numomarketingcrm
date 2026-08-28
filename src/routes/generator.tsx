@@ -138,22 +138,39 @@ function GeneratorPage() {
     retry: 1,
   });
 
+  // Leads arrive batch by batch, so accumulate them across polls.
+  useEffect(() => {
+    if (!activeRun || !activeRun.leads?.length) return;
+    setResults((prev) => {
+      const known = new Set(prev.map((l) => l.id));
+      const added = activeRun.leads.filter((l) => !known.has(l.id));
+      return added.length ? [...prev, ...added] : prev;
+    });
+  }, [activeRun]);
+
   useEffect(() => {
     if (!activeRun || reportedRunId === activeRun.id) return;
     if (activeRun.status === "COMPLETED") {
       setReportedRunId(activeRun.id);
-      setResults(activeRun.leads);
       void qc.invalidateQueries({ queryKey: ["leads"] });
       void qc.invalidateQueries({ queryKey: ["lead_gen_runs"] });
-      toast.success(`${activeRun.created_count} leads added to Lead Tracker`, {
-        description: `${activeRun.skipped_duplicates} duplicates skipped · ${activeRun.rejected_count} filtered out · source ${activeRun.source}`,
-      });
+      const partial = activeRun.created_count < activeRun.requested;
+      const detail = `${activeRun.skipped_duplicates} duplicates skipped · ${activeRun.rejected_count} filtered out · source ${activeRun.source}`;
+      if (partial) {
+        toast.warning(
+          `${activeRun.created_count} of ${activeRun.requested} qualified leads found`,
+          { description: `${activeRun.error ?? "Sourcing limit reached."} ${detail}` },
+        );
+      } else {
+        toast.success(`${activeRun.created_count} qualified leads added to Lead Tracker`, { description: detail });
+      }
     } else if (activeRun.status === "FAILED") {
       setReportedRunId(activeRun.id);
       void qc.invalidateQueries({ queryKey: ["lead_gen_runs"] });
       toast.error("Lead generation failed", { description: activeRun.error ?? "The provider job did not complete." });
     }
   }, [activeRun, qc, reportedRunId]);
+
 
   const progress = Math.min(100, Math.round((todayCreated / DAILY_TARGET) * 100));
 
