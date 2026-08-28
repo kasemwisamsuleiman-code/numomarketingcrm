@@ -138,12 +138,16 @@ export type Database = {
       }
       lead_gen_runs: {
         Row: {
+          apify_dataset_id: string | null
+          apify_run_id: string | null
           category: string
+          completed_at: string | null
           created_at: string
           created_count: number
           error: string | null
           id: string
           location: string
+          processing_started_at: string | null
           rejected_count: number
           requested: number
           skipped_duplicates: number
@@ -152,12 +156,16 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          apify_dataset_id?: string | null
+          apify_run_id?: string | null
           category: string
+          completed_at?: string | null
           created_at?: string
           created_count?: number
           error?: string | null
           id?: string
           location: string
+          processing_started_at?: string | null
           rejected_count?: number
           requested?: number
           skipped_duplicates?: number
@@ -166,12 +174,16 @@ export type Database = {
           user_id: string
         }
         Update: {
+          apify_dataset_id?: string | null
+          apify_run_id?: string | null
           category?: string
+          completed_at?: string | null
           created_at?: string
           created_count?: number
           error?: string | null
           id?: string
           location?: string
+          processing_started_at?: string | null
           rejected_count?: number
           requested?: number
           skipped_duplicates?: number
