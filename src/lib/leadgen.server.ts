@@ -120,6 +120,88 @@ function apifyRequestConfig() {
 const WAIT_SECONDS = 50; // stay under the 60s gateway/proxy request limit
 const MAX_WAIT_MS = 5 * 60 * 1000;
 
+export type ApifyRunState = {
+  runId: string;
+  datasetId: string | null;
+  status: string;
+};
+
+function parseApifyRun(json: unknown): ApifyRunState {
+  const data = (json as { data?: Record<string, unknown> })?.data;
+  const runId = String(data?.["id"] ?? "");
+  if (!runId) throw new Error("Apify did not return a run id.");
+  return {
+    runId,
+    datasetId: data?.["defaultDatasetId"] ? String(data["defaultDatasetId"]) : null,
+    status: String(data?.["status"] ?? "UNKNOWN"),
+  };
+}
+
+/** Starts a crawl and returns immediately so the app request never waits on Apify. */
+export async function startApifyRun(category: string, location: string, count: number): Promise<ApifyRunState> {
+  const { base, headers } = apifyRequestConfig();
+  const response = await fetch(`${base}/acts/${APIFY_ACTOR}/runs`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      searchStringsArray: [category],
+      locationQuery: location,
+      maxCrawledPlacesPerSearch: count,
+      language: "en",
+      scrapeContacts: true,
+    }),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    console.error(`Apify run start failed [${response.status}]: ${body.slice(0, 500)}`);
+    throw new Error(`Apify could not start (${response.status}).`);
+  }
+  return parseApifyRun(await response.json());
+}
+
+/** One non-blocking provider status check; the browser performs later polls. */
+export async function getApifyRun(runId: string): Promise<ApifyRunState> {
+  const { base, headers } = apifyRequestConfig();
+  const response = await fetch(`${base}/actor-runs/${encodeURIComponent(runId)}`, { headers });
+  if (!response.ok) {
+    const body = await response.text();
+    console.error(`Apify run status failed [${response.status}]: ${body.slice(0, 500)}`);
+    throw new Error(`Could not check Apify progress (${response.status}).`);
+  }
+  return parseApifyRun(await response.json());
+}
+
+export async function getApifyDataset(datasetId: string, count: number, category: string, location: string) {
+  const { base, headers } = apifyRequestConfig();
+  const response = await fetch(
+    `${base}/datasets/${encodeURIComponent(datasetId)}/items?clean=true&limit=${Math.max(1, count)}`,
+    { headers },
+  );
+  if (!response.ok) {
+    const body = await response.text();
+    console.error(`Apify dataset fetch failed [${response.status}]: ${body.slice(0, 500)}`);
+    throw new Error(`Could not retrieve Apify results (${response.status}).`);
+  }
+  const items = (await response.json()) as Array<Record<string, any>>;
+  return mapApifyItems(items, category, location);
+}
+
+function mapApifyItems(items: Array<Record<string, any>>, category: string, location: string): RawCandidate[] {
+  return items.map((i) => ({
+    business_name: String(i["title"] ?? "").trim(),
+    category: i["categoryName"] ?? category,
+    location: i["address"] ?? location,
+    phone: i["phone"] ?? null,
+    email: Array.isArray(i["emails"]) ? (i["emails"][0] ?? null) : null,
+    website: i["website"] ?? null,
+    business_hours: Array.isArray(i["openingHours"])
+      ? i["openingHours"].map((h: any) => `${h.day}: ${h.hours}`).join(", ")
+      : null,
+    rating: i["totalScore"] ?? null,
+    reviews: i["reviewsCount"] ?? null,
+  })).filter((candidate) => candidate.business_name.length > 0);
+}
+
 /**
  * Stage 1a — real Google Maps scraping through Apify (secret stays server-side).
  * Uses the ASYNC run API and polls: the synchronous endpoint keeps one HTTP
@@ -179,20 +261,7 @@ export async function scrapeWithApify(category: string, location: string, count:
     throw new Error(`Apify scrape failed (${itemsRes.status})`);
   }
   const items = (await itemsRes.json()) as Array<Record<string, any>>;
-
-  return items.map((i) => ({
-    business_name: String(i["title"] ?? "").trim(),
-    category: i["categoryName"] ?? category,
-    location: i["address"] ?? location,
-    phone: i["phone"] ?? null,
-    email: Array.isArray(i["emails"]) ? (i["emails"][0] ?? null) : null,
-    website: i["website"] ?? null,
-    business_hours: Array.isArray(i["openingHours"])
-      ? i["openingHours"].map((h: any) => `${h.day}: ${h.hours}`).join(", ")
-      : null,
-    rating: i["totalScore"] ?? null,
-    reviews: i["reviewsCount"] ?? null,
-  })).filter((c) => c.business_name.length > 0);
+  return mapApifyItems(items, category, location);
 }
 
 /** Stage 1b — AI-drafted candidate list used while Apify is not connected. */

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -9,7 +9,7 @@ import { AppShell, EmptyState, TableShell } from "@/components/crm/AppShell";
 import { KpiCard } from "@/components/crm/KpiCard";
 import { StatusPill } from "@/components/crm/StatusPill";
 import { DAILY_TARGET, formatDate, formatDateTime, money } from "@/lib/crm";
-import { generateLeads } from "@/lib/leadgen.functions";
+import { advanceLeadGeneration, generateLeads } from "@/lib/leadgen.functions";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -53,21 +53,69 @@ type LeadRow = {
 function DashboardPage() {
   const qc = useQueryClient();
   const runGeneration = useServerFn(generateLeads);
+  const advanceGeneration = useServerFn(advanceLeadGeneration);
   const [genCategory, setGenCategory] = useState("Barbershop");
   const [genLocation, setGenLocation] = useState("");
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [reportedRunId, setReportedRunId] = useState<string | null>(null);
+
+  const { data: activeJobs = [] } = useQuery({
+    queryKey: ["active-lead-generation-jobs"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("lead_gen_runs")
+        .select("id, status")
+        .in("status", ["SOURCING", "QUALIFYING"])
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  useEffect(() => {
+    if (!activeRunId && activeJobs[0]?.id) setActiveRunId(activeJobs[0].id);
+  }, [activeJobs, activeRunId]);
 
   const quickRun = useMutation({
     mutationFn: async () =>
       runGeneration({ data: { category: genCategory.trim(), location: genLocation.trim(), count: 10 } }),
     onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ["leads"] });
+      setReportedRunId(null);
+      setActiveRunId(res.runId);
       qc.invalidateQueries({ queryKey: ["lead_gen_runs"] });
-      toast.success(`${res.created} leads added`, {
-        description: `${res.duplicates} duplicates skipped · ${res.rejected} filtered out`,
-      });
+      qc.invalidateQueries({ queryKey: ["active-lead-generation-jobs"] });
+      toast.success("Lead generation started", { description: `${res.source} is sourcing businesses now.` });
     },
     onError: (err: Error) => toast.error("Lead generation failed", { description: err.message }),
   });
+
+  const { data: activeRun } = useQuery({
+    queryKey: ["dashboard-generation-progress", activeRunId],
+    queryFn: () => advanceGeneration({ data: { runId: activeRunId ?? "" } }),
+    enabled: Boolean(activeRunId),
+    refetchInterval: (query) => {
+      const run = query.state.data;
+      return run?.status === "COMPLETED" || run?.status === "FAILED" ? false : 5000;
+    },
+    retry: 1,
+  });
+
+  useEffect(() => {
+    if (!activeRun || reportedRunId === activeRun.id) return;
+    if (activeRun.status === "COMPLETED") {
+      setReportedRunId(activeRun.id);
+      void qc.invalidateQueries({ queryKey: ["leads"] });
+      void qc.invalidateQueries({ queryKey: ["lead_gen_runs"] });
+      void qc.invalidateQueries({ queryKey: ["active-lead-generation-jobs"] });
+      toast.success(`${activeRun.created_count} leads added`, {
+        description: `${activeRun.skipped_duplicates} duplicates skipped · ${activeRun.rejected_count} filtered out`,
+      });
+    } else if (activeRun.status === "FAILED") {
+      setReportedRunId(activeRun.id);
+      toast.error("Lead generation failed", { description: activeRun.error ?? "The provider job did not complete." });
+    }
+  }, [activeRun, qc, reportedRunId]);
 
   const { data: leads = [], isLoading: leadsLoading } = useQuery({
     queryKey: ["leads"],
@@ -193,12 +241,12 @@ function DashboardPage() {
             />
             <Button
               className="rounded-full bg-gold text-gold-foreground hover:bg-gold/90"
-              disabled={quickRun.isPending || !genLocation.trim() || !genCategory.trim()}
+              disabled={quickRun.isPending || Boolean(activeRunId && activeRun?.status !== "COMPLETED" && activeRun?.status !== "FAILED") || !genLocation.trim() || !genCategory.trim()}
               onClick={() => quickRun.mutate()}
             >
-              {quickRun.isPending ? (
+              {quickRun.isPending || (activeRunId && activeRun?.status !== "COMPLETED" && activeRun?.status !== "FAILED") ? (
                 <>
-                  <Loader2 className="mr-2 size-4 animate-spin" /> Generating…
+                  <Loader2 className="mr-2 size-4 animate-spin" /> {activeRun?.status === "QUALIFYING" ? "Qualifying…" : "Sourcing…"}
                 </>
               ) : (
                 <>
