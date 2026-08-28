@@ -140,54 +140,66 @@ export type Database = {
         Row: {
           apify_dataset_id: string | null
           apify_run_id: string | null
+          batch_count: number
           category: string
           completed_at: string | null
+          crawl_limit: number
           created_at: string
           created_count: number
           error: string | null
           id: string
           location: string
+          processed_keys: Json
           processing_started_at: string | null
           rejected_count: number
           requested: number
           skipped_duplicates: number
           source: string
+          sourced_count: number
           status: string
           user_id: string
         }
         Insert: {
           apify_dataset_id?: string | null
           apify_run_id?: string | null
+          batch_count?: number
           category: string
           completed_at?: string | null
+          crawl_limit?: number
           created_at?: string
           created_count?: number
           error?: string | null
           id?: string
           location: string
+          processed_keys?: Json
           processing_started_at?: string | null
           rejected_count?: number
           requested?: number
           skipped_duplicates?: number
           source?: string
+          sourced_count?: number
           status?: string
           user_id: string
         }
         Update: {
           apify_dataset_id?: string | null
           apify_run_id?: string | null
+          batch_count?: number
           category?: string
           completed_at?: string | null
+          crawl_limit?: number
           created_at?: string
           created_count?: number
           error?: string | null
           id?: string
           location?: string
+          processed_keys?: Json
           processing_started_at?: string | null
           rejected_count?: number
           requested?: number
           skipped_duplicates?: number
           source?: string
+          sourced_count?: number
           status?: string
           user_id?: string
         }
