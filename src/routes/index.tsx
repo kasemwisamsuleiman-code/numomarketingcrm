@@ -59,6 +59,24 @@ function DashboardPage() {
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [reportedRunId, setReportedRunId] = useState<string | null>(null);
 
+  const { data: activeJobs = [] } = useQuery({
+    queryKey: ["active-lead-generation-jobs"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("lead_gen_runs")
+        .select("id, status")
+        .in("status", ["SOURCING", "QUALIFYING"])
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  useEffect(() => {
+    if (!activeRunId && activeJobs[0]?.id) setActiveRunId(activeJobs[0].id);
+  }, [activeJobs, activeRunId]);
+
   const quickRun = useMutation({
     mutationFn: async () =>
       runGeneration({ data: { category: genCategory.trim(), location: genLocation.trim(), count: 10 } }),
@@ -66,6 +84,7 @@ function DashboardPage() {
       setReportedRunId(null);
       setActiveRunId(res.runId);
       qc.invalidateQueries({ queryKey: ["lead_gen_runs"] });
+      qc.invalidateQueries({ queryKey: ["active-lead-generation-jobs"] });
       toast.success("Lead generation started", { description: `${res.source} is sourcing businesses now.` });
     },
     onError: (err: Error) => toast.error("Lead generation failed", { description: err.message }),
@@ -88,6 +107,7 @@ function DashboardPage() {
       setReportedRunId(activeRun.id);
       void qc.invalidateQueries({ queryKey: ["leads"] });
       void qc.invalidateQueries({ queryKey: ["lead_gen_runs"] });
+      void qc.invalidateQueries({ queryKey: ["active-lead-generation-jobs"] });
       toast.success(`${activeRun.created_count} leads added`, {
         description: `${activeRun.skipped_duplicates} duplicates skipped · ${activeRun.rejected_count} filtered out`,
       });

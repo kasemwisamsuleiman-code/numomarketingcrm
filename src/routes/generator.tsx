@@ -99,6 +99,12 @@ function GeneratorPage() {
     },
   });
 
+  useEffect(() => {
+    if (activeRunId) return;
+    const resumable = runs.find((run) => run.status === "SOURCING" || run.status === "QUALIFYING");
+    if (resumable) setActiveRunId(resumable.id);
+  }, [activeRunId, runs]);
+
   const todayCreated = useMemo(() => {
     const today = new Date().toDateString();
     return runs
