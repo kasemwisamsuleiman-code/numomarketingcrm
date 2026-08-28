@@ -40,6 +40,9 @@ export const verifyOpenAiConnection = createServerFn({ method: "POST" })
     return { ok: false, message: `OpenAI check failed (${status}).` };
   });
 
+import { MAX_BATCHES, MAX_JOB_MS, maxTotalCrawl, nextCrawlLimit } from "./leadgen-limits";
+
+
 export const generateLeads = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { category: string; location: string; count: number }) => {
@@ -59,7 +62,9 @@ export const generateLeads = createServerFn({ method: "POST" })
     if (!usedApify) throw new Error("Apify is not connected. Lead generation cannot start.");
     const source = `${usedApify ? "APIFY" : "AI SOURCED"} + ${provider}`;
     try {
-      const apify = await startApifyRun(data.category, data.location, data.count);
+      // Over-source from the start: ask Apify for ~3x the qualified target.
+      const crawlLimit = nextCrawlLimit(data.count, 0, 0);
+      const apify = await startApifyRun(data.category, data.location, crawlLimit);
       const { data: run, error } = await supabase.from("lead_gen_runs").insert({
         user_id: userId,
         category: data.category,
@@ -69,6 +74,8 @@ export const generateLeads = createServerFn({ method: "POST" })
         status: "SOURCING",
         apify_run_id: apify.runId,
         apify_dataset_id: apify.datasetId,
+        crawl_limit: crawlLimit,
+        batch_count: 1,
       }).select("id, status, source").single();
       if (error || !run) throw new Error(error?.message ?? "Could not save the generation job.");
       return { runId: run.id, status: run.status, source: run.source, provider };
@@ -135,9 +142,23 @@ export const advanceLeadGeneration = createServerFn({ method: "POST" })
       }
 
       if (!datasetId) throw new Error("Apify results are unavailable for this job.");
-      const sourced = await pipeline.getApifyDataset(datasetId, run.requested, run.category, run.location);
-      const candidates = sourced.filter((candidate) => pipeline.matchesLocation(candidate.location, run.location));
-      let offRegion = sourced.length - candidates.length;
+      const target = run.requested;
+      const alreadyAccepted = run.created_count ?? 0;
+      const remainingTarget = Math.max(0, target - alreadyAccepted);
+      const crawlLimit = run.crawl_limit || target;
+
+      // Businesses already reviewed in earlier batches of THIS job — never re-qualify
+      // or re-insert them, so overlapping datasets cost nothing extra.
+      const processedKeys = new Set<string>(
+        Array.isArray(run.processed_keys) ? (run.processed_keys as unknown[]).map((k) => String(k)) : [],
+      );
+
+      const sourced = await pipeline.getApifyDataset(datasetId, crawlLimit, run.category, run.location);
+      const fresh = sourced.filter((candidate) => !processedKeys.has(pipeline.normalizeName(candidate.business_name)));
+      for (const candidate of fresh) processedKeys.add(pipeline.normalizeName(candidate.business_name));
+
+      const candidates = fresh.filter((candidate) => pipeline.matchesLocation(candidate.location, run.location));
+      let offRegion = fresh.length - candidates.length;
       const { qualified: rawQualified, rejected: dropped } = await pipeline.qualifyCandidates(candidates, run.category, run.location);
       const qualified = rawQualified.filter((lead) => {
         if (pipeline.matchesLocation(lead.location, run.location)) return true;
@@ -153,7 +174,7 @@ export const advanceLeadGeneration = createServerFn({ method: "POST" })
         if (seen.has(key)) { duplicates += 1; return false; }
         seen.add(key);
         return true;
-      }).slice(0, run.requested).map((lead) => ({
+      }).slice(0, remainingTarget).map((lead) => ({
         user_id: userId,
         business_name: lead.business_name,
         category: lead.category,
@@ -180,17 +201,69 @@ export const advanceLeadGeneration = createServerFn({ method: "POST" })
           personalized_line: row.personalized_line ?? null,
         }));
       }
-      const rejected = dropped + offRegion;
+
+      const accepted = alreadyAccepted + insertedLeads.length;
+      const totalDuplicates = (run.skipped_duplicates ?? 0) + duplicates;
+      const totalRejected = (run.rejected_count ?? 0) + dropped + offRegion;
+      const totalSourced = (run.sourced_count ?? 0) + fresh.length;
+      const batches = run.batch_count ?? 1;
+      const elapsed = Date.now() - new Date(run.created_at).getTime();
+
+      // Should we source another batch to reach the qualified target?
+      const nextLimit = nextCrawlLimit(target, accepted, crawlLimit);
+      const canSourceMore =
+        accepted < target &&
+        batches < MAX_BATCHES &&
+        elapsed < MAX_JOB_MS &&
+        crawlLimit < maxTotalCrawl(target) &&
+        // If Apify returned far fewer places than we asked for, the area is
+        // exhausted — crawling again would just re-return the same businesses.
+        sourced.length >= crawlLimit - 2;
+
+      if (canSourceMore) {
+        const apify = await pipeline.startApifyRun(run.category, run.location, nextLimit);
+        const { error: nextError } = await supabase.from("lead_gen_runs").update({
+          status: "SOURCING",
+          apify_run_id: apify.runId,
+          apify_dataset_id: apify.datasetId,
+          crawl_limit: nextLimit,
+          batch_count: batches + 1,
+          created_count: accepted,
+          skipped_duplicates: totalDuplicates,
+          rejected_count: totalRejected,
+          sourced_count: totalSourced,
+          processed_keys: [...processedKeys],
+          processing_started_at: null,
+          error: null,
+        }).eq("id", run.id).eq("status", "QUALIFYING");
+        if (nextError) throw new Error(nextError.message);
+        return {
+          ...run, status: "SOURCING", created_count: accepted, skipped_duplicates: totalDuplicates,
+          rejected_count: totalRejected, sourced_count: totalSourced, batch_count: batches + 1,
+          crawl_limit: nextLimit, leads: insertedLeads,
+        };
+      }
+
       const completedAt = new Date().toISOString();
+      const shortfall = accepted < target;
       const { error: completeError } = await supabase.from("lead_gen_runs").update({
-        status: "COMPLETED", created_count: insertedLeads.length, skipped_duplicates: duplicates,
-        rejected_count: rejected, completed_at: completedAt, error: null,
+        status: "COMPLETED", created_count: accepted, skipped_duplicates: totalDuplicates,
+        rejected_count: totalRejected, sourced_count: totalSourced, processed_keys: [...processedKeys],
+        completed_at: completedAt,
+        error: shortfall
+          ? `Only ${accepted} of ${target} qualified leads found after reviewing ${totalSourced} businesses in ${batches} sourcing round${batches === 1 ? "" : "s"}.`
+          : null,
       }).eq("id", run.id).eq("status", "QUALIFYING");
       if (completeError) throw new Error(completeError.message);
-      return { ...run, status: "COMPLETED", created_count: insertedLeads.length, skipped_duplicates: duplicates, rejected_count: rejected, completed_at: completedAt, leads: insertedLeads };
+      return {
+        ...run, status: "COMPLETED", created_count: accepted, skipped_duplicates: totalDuplicates,
+        rejected_count: totalRejected, sourced_count: totalSourced, batch_count: batches,
+        completed_at: completedAt, partial: shortfall, leads: insertedLeads,
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Lead generation failed.";
       await supabase.from("lead_gen_runs").update({ status: "FAILED", error: message, completed_at: new Date().toISOString() }).eq("id", run.id);
       return { ...run, status: "FAILED", error: message, leads: [] as GeneratedLead[] };
     }
   });
+

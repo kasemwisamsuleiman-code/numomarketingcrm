@@ -138,22 +138,39 @@ function GeneratorPage() {
     retry: 1,
   });
 
+  // Leads arrive batch by batch, so accumulate them across polls.
+  useEffect(() => {
+    if (!activeRun || !activeRun.leads?.length) return;
+    setResults((prev) => {
+      const known = new Set(prev.map((l) => l.id));
+      const added = activeRun.leads.filter((l) => !known.has(l.id));
+      return added.length ? [...prev, ...added] : prev;
+    });
+  }, [activeRun]);
+
   useEffect(() => {
     if (!activeRun || reportedRunId === activeRun.id) return;
     if (activeRun.status === "COMPLETED") {
       setReportedRunId(activeRun.id);
-      setResults(activeRun.leads);
       void qc.invalidateQueries({ queryKey: ["leads"] });
       void qc.invalidateQueries({ queryKey: ["lead_gen_runs"] });
-      toast.success(`${activeRun.created_count} leads added to Lead Tracker`, {
-        description: `${activeRun.skipped_duplicates} duplicates skipped · ${activeRun.rejected_count} filtered out · source ${activeRun.source}`,
-      });
+      const partial = activeRun.created_count < activeRun.requested;
+      const detail = `${activeRun.skipped_duplicates} duplicates skipped · ${activeRun.rejected_count} filtered out · source ${activeRun.source}`;
+      if (partial) {
+        toast.warning(
+          `${activeRun.created_count} of ${activeRun.requested} qualified leads found`,
+          { description: `${activeRun.error ?? "Sourcing limit reached."} ${detail}` },
+        );
+      } else {
+        toast.success(`${activeRun.created_count} qualified leads added to Lead Tracker`, { description: detail });
+      }
     } else if (activeRun.status === "FAILED") {
       setReportedRunId(activeRun.id);
       void qc.invalidateQueries({ queryKey: ["lead_gen_runs"] });
       toast.error("Lead generation failed", { description: activeRun.error ?? "The provider job did not complete." });
     }
   }, [activeRun, qc, reportedRunId]);
+
 
   const progress = Math.min(100, Math.round((todayCreated / DAILY_TARGET) * 100));
 
@@ -233,7 +250,7 @@ function GeneratorPage() {
                 <SelectContent>
                   {["5", "10", "15", "25", "50"].map((n) => (
                     <SelectItem key={n} value={n}>
-                      {n} leads
+                      {n} qualified leads
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -258,12 +275,21 @@ function GeneratorPage() {
 
           {generate.isPending || (activeRunId && activeRun?.status !== "COMPLETED" && activeRun?.status !== "FAILED") ? (
             <div className="mt-5 space-y-2 rounded-2xl border border-border bg-secondary/50 p-4 text-sm">
+              <p className="font-semibold text-foreground">
+                Qualified {activeRun?.created_count ?? 0} of {activeRun?.requested ?? (Number(count) || 0)} target leads
+                {activeRun?.batch_count && activeRun.batch_count > 1 ? ` · sourcing round ${activeRun.batch_count}` : ""}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {activeRun?.sourced_count ?? 0} businesses reviewed so far — Numo keeps sourcing extra candidates in safe
+                batches until your target is met or the sourcing limit is reached.
+              </p>
               <Step done={activeRun?.status === "QUALIFYING"} label="Sourcing businesses with Apify" active={activeRun?.status !== "QUALIFYING"} />
               <Step done={false} label="OpenAI qualification, scoring & dedupe" active={activeRun?.status === "QUALIFYING"} />
               <Step done={false} label="Writing personalized opening lines" active={activeRun?.status === "QUALIFYING"} />
               <Step done={false} label="Saving into Lead Tracker" active={activeRun?.status === "QUALIFYING"} />
             </div>
           ) : null}
+
         </div>
 
         <div className="grid gap-4">
