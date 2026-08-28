@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -9,7 +9,7 @@ import { RequireAuth } from "@/components/crm/RequireAuth";
 import { AppShell, EmptyState, TableShell } from "@/components/crm/AppShell";
 import { KpiCard } from "@/components/crm/KpiCard";
 import { DAILY_TARGET, formatDateTime } from "@/lib/crm";
-import { generateLeads, getLeadGenStatus, type GeneratedLead } from "@/lib/leadgen.functions";
+import { advanceLeadGeneration, generateLeads, getLeadGenStatus, type GeneratedLead } from "@/lib/leadgen.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -73,10 +73,13 @@ type RunRow = {
 function GeneratorPage() {
   const qc = useQueryClient();
   const runGeneration = useServerFn(generateLeads);
+  const advanceGeneration = useServerFn(advanceLeadGeneration);
   const [category, setCategory] = useState("Barbershop");
   const [location, setLocation] = useState("");
   const [count, setCount] = useState("10");
   const [results, setResults] = useState<GeneratedLead[]>([]);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [reportedRunId, setReportedRunId] = useState<string | null>(null);
 
   const { data: status } = useQuery({
     queryKey: ["leadgen-status"],
@@ -109,16 +112,42 @@ function GeneratorPage() {
         data: { category: category.trim(), location: location.trim(), count: Number(count) || 10 },
       }),
     onSuccess: (res) => {
-      setResults(res.leads);
-      qc.invalidateQueries({ queryKey: ["leads"] });
+      setResults([]);
+      setReportedRunId(null);
+      setActiveRunId(res.runId);
       qc.invalidateQueries({ queryKey: ["lead_gen_runs"] });
-      toast.success(
-        `${res.created} leads added to Lead Tracker`,
-        { description: `${res.duplicates} duplicates skipped · ${res.rejected} filtered out · source ${res.source}` },
-      );
+      toast.success("Lead generation started", { description: `${res.source} is sourcing businesses now.` });
     },
     onError: (err: Error) => toast.error("Lead generation failed", { description: err.message }),
   });
+
+  const { data: activeRun } = useQuery({
+    queryKey: ["lead-generation-progress", activeRunId],
+    queryFn: () => advanceGeneration({ data: { runId: activeRunId ?? "" } }),
+    enabled: Boolean(activeRunId),
+    refetchInterval: (query) => {
+      const run = query.state.data;
+      return run?.status === "COMPLETED" || run?.status === "FAILED" ? false : 5000;
+    },
+    retry: 1,
+  });
+
+  useEffect(() => {
+    if (!activeRun || reportedRunId === activeRun.id) return;
+    if (activeRun.status === "COMPLETED") {
+      setReportedRunId(activeRun.id);
+      setResults(activeRun.leads);
+      void qc.invalidateQueries({ queryKey: ["leads"] });
+      void qc.invalidateQueries({ queryKey: ["lead_gen_runs"] });
+      toast.success(`${activeRun.created_count} leads added to Lead Tracker`, {
+        description: `${activeRun.skipped_duplicates} duplicates skipped · ${activeRun.rejected_count} filtered out · source ${activeRun.source}`,
+      });
+    } else if (activeRun.status === "FAILED") {
+      setReportedRunId(activeRun.id);
+      void qc.invalidateQueries({ queryKey: ["lead_gen_runs"] });
+      toast.error("Lead generation failed", { description: activeRun.error ?? "The provider job did not complete." });
+    }
+  }, [activeRun, qc, reportedRunId]);
 
   const progress = Math.min(100, Math.round((todayCreated / DAILY_TARGET) * 100));
 
@@ -206,12 +235,12 @@ function GeneratorPage() {
             </label>
             <Button
               className="rounded-full bg-ink text-ink-foreground hover:bg-ink/90 sm:ml-auto"
-              disabled={generate.isPending || !location.trim()}
+              disabled={generate.isPending || Boolean(activeRunId && activeRun?.status !== "COMPLETED" && activeRun?.status !== "FAILED") || !location.trim()}
               onClick={() => generate.mutate()}
             >
-              {generate.isPending ? (
+              {generate.isPending || (activeRunId && activeRun?.status !== "COMPLETED" && activeRun?.status !== "FAILED") ? (
                 <>
-                  <Loader2 className="mr-2 size-4 animate-spin" /> Generating…
+                  <Loader2 className="mr-2 size-4 animate-spin" /> {activeRun?.status === "QUALIFYING" ? "Qualifying…" : "Sourcing…"}
                 </>
               ) : (
                 <>
@@ -221,12 +250,12 @@ function GeneratorPage() {
             </Button>
           </div>
 
-          {generate.isPending ? (
+          {generate.isPending || (activeRunId && activeRun?.status !== "COMPLETED" && activeRun?.status !== "FAILED") ? (
             <div className="mt-5 space-y-2 rounded-2xl border border-border bg-secondary/50 p-4 text-sm">
-              <Step done label="Sourcing businesses" active />
-              <Step done={false} label="AI qualification, scoring & dedupe" active />
-              <Step done={false} label="Writing personalized opening lines" active />
-              <Step done={false} label="Saving into Lead Tracker" active />
+              <Step done={activeRun?.status === "QUALIFYING"} label="Sourcing businesses with Apify" active={activeRun?.status !== "QUALIFYING"} />
+              <Step done={false} label="OpenAI qualification, scoring & dedupe" active={activeRun?.status === "QUALIFYING"} />
+              <Step done={false} label="Writing personalized opening lines" active={activeRun?.status === "QUALIFYING"} />
+              <Step done={false} label="Saving into Lead Tracker" active={activeRun?.status === "QUALIFYING"} />
             </div>
           ) : null}
         </div>
