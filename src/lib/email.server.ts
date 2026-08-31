@@ -1,16 +1,31 @@
 /**
- * Server-only email provider adapter (Resend).
+ * Server-only email provider adapter (Resend via the Lovable connector gateway).
  *
- * The API key is read from process.env inside the call, never at module scope,
+ * Credentials are read from process.env inside each call, never at module scope,
  * and this file is server-only (*.server.ts is blocked from client bundles).
  * Nothing here is ever reachable from the browser.
  */
 
-const RESEND_URL = "https://api.resend.com/emails";
+const GATEWAY = "https://connector-gateway.lovable.dev/resend";
+
+function creds() {
+  const lovableKey = process.env["LOVABLE_API_KEY"];
+  const connectionKey = process.env["RESEND_API_KEY"];
+  return { lovableKey, connectionKey };
+}
+
+function gatewayHeaders(lovableKey: string, connectionKey: string) {
+  return {
+    "content-type": "application/json",
+    authorization: `Bearer ${lovableKey}`,
+    "X-Connection-Api-Key": connectionKey,
+  };
+}
 
 /** True when a server-side Resend credential is configured. Never returns the value. */
 export function hasResend() {
-  return Boolean(process.env["RESEND_API_KEY"]);
+  const { lovableKey, connectionKey } = creds();
+  return Boolean(lovableKey && connectionKey);
 }
 
 export type SendResult = { id: string };
@@ -24,12 +39,13 @@ export async function sendEmailViaResend(input: {
   text: string;
   html: string;
 }): Promise<SendResult> {
-  const key = process.env["RESEND_API_KEY"];
-  if (!key) throw new Error("Email provider is not connected. Add RESEND_API_KEY in Project Settings → Secrets.");
+  const { lovableKey, connectionKey } = creds();
+  if (!lovableKey || !connectionKey)
+    throw new Error("Email provider is not connected. Link the Resend connector to this project.");
 
-  const res = await fetch(RESEND_URL, {
+  const res = await fetch(`${GATEWAY}/emails`, {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+    headers: gatewayHeaders(lovableKey, connectionKey),
     body: JSON.stringify({
       from: `${input.fromName} <${input.fromEmail}>`,
       to: [input.to],
@@ -42,6 +58,7 @@ export async function sendEmailViaResend(input: {
 
   const raw = await res.text();
   if (!res.ok) {
+    console.error(`[resend] send failed [${res.status}]: ${raw}`);
     let message = `Email provider rejected the send (${res.status}).`;
     try {
       const parsed = JSON.parse(raw) as { message?: string; error?: string; name?: string };
@@ -60,10 +77,15 @@ export async function sendEmailViaResend(input: {
 
 /** Zero-cost credential probe (lists domains) so status can be shown without sending. */
 export async function verifyResendKey(): Promise<{ ok: boolean; status: number; domains: string[] }> {
-  const key = process.env["RESEND_API_KEY"];
-  if (!key) return { ok: false, status: 0, domains: [] };
-  const res = await fetch("https://api.resend.com/domains", { headers: { authorization: `Bearer ${key}` } });
-  if (!res.ok) return { ok: false, status: res.status, domains: [] };
+  const { lovableKey, connectionKey } = creds();
+  if (!lovableKey || !connectionKey) return { ok: false, status: 0, domains: [] };
+  const res = await fetch(`${GATEWAY}/domains`, {
+    headers: gatewayHeaders(lovableKey, connectionKey),
+  });
+  if (!res.ok) {
+    console.error(`[resend] domains lookup failed [${res.status}]: ${await res.text()}`);
+    return { ok: false, status: res.status, domains: [] };
+  }
   const json = (await res.json()) as { data?: Array<{ name?: string; status?: string }> };
   const domains = (json.data ?? [])
     .filter((d) => (d.status ?? "").toLowerCase() === "verified")
@@ -71,6 +93,7 @@ export async function verifyResendKey(): Promise<{ ok: boolean; status: number; 
     .filter(Boolean);
   return { ok: true, status: res.status, domains };
 }
+
 
 function secret() {
   return process.env["UNSUBSCRIBE_SECRET"] ?? process.env["SUPABASE_SERVICE_ROLE_KEY"] ?? "numo-unsubscribe";

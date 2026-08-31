@@ -39,6 +39,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { buildEmail, isValidEmail, type EmailKind, type EmailSettings } from "@/lib/email-template";
 import { sendLeadEmail } from "@/lib/email.functions";
+import { EmailOutreachSettings } from "@/components/crm/EmailOutreachSettings";
 
 export const Route = createFileRoute("/automation")({
   head: () => ({
@@ -418,7 +419,7 @@ function AutomationPage() {
   return (
     <AppShell
       title="Outreach Automation"
-      subtitle="Queue leads, simulate the outreach lifecycle and audit every automation event. Simulation only — no email or SMS is ever sent in this phase."
+      subtitle="Queue leads, manage email outreach and audit every automation event. Bulk sending stays off — real emails go out one lead at a time, only when live email is enabled."
       actions={
         <Select value={channel} onValueChange={(v) => setChannel(v as OutreachChannel)}>
           <SelectTrigger className="w-44 rounded-full">
@@ -457,6 +458,9 @@ function AutomationPage() {
         <KpiCard label="Follow-ups Due" value={kpis.due} />
         <KpiCard label="Stopped" value={kpis.stopped} />
       </div>
+
+      <EmailOutreachSettings />
+
 
       <div className="panel mt-6 flex flex-col gap-3 p-4 lg:flex-row lg:items-center">
         <div className="relative flex-1">
