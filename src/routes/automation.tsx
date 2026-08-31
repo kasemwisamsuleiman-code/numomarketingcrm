@@ -395,7 +395,13 @@ function AutomationPage() {
                     {lead.outreach_status.replace("_", " ")}
                   </span>
                 </td>
+                <td className="px-4 py-3 text-xs text-muted-foreground">
+                  <p>Step {lead.sequence_step ?? 0}</p>
+                  {lead.opted_out ? <p className="font-semibold text-destructive">Opted out</p> : null}
+                  {lead.sms_consent ? <p className="text-success">SMS consent</p> : null}
+                </td>
                 <td className="px-4 py-3">
+
                   <StatusPill status={lead.status} />
                 </td>
                 <td className="px-4 py-3 text-xs text-muted-foreground">{formatDateTime(lead.last_contacted_at)}</td>
