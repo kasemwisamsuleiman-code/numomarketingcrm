@@ -411,7 +411,12 @@ export type Database = {
           lead_score: number | null
           location: string | null
           next_follow_up_at: string | null
+          norm_domain: string | null
+          norm_email: string | null
+          norm_phone: string | null
           notes: string | null
+          opted_out: boolean
+          opted_out_at: string | null
           outreach_attempts: number
           outreach_channel: string | null
           outreach_status: string
@@ -419,6 +424,10 @@ export type Database = {
           phone: string | null
           queued_at: string | null
           reply_detected: boolean
+          sequence_step: number
+          sms_consent: boolean
+          sms_consent_at: string | null
+          sms_consent_source: string | null
           source: string
           status: string
           stop_outreach: boolean
@@ -438,7 +447,12 @@ export type Database = {
           lead_score?: number | null
           location?: string | null
           next_follow_up_at?: string | null
+          norm_domain?: string | null
+          norm_email?: string | null
+          norm_phone?: string | null
           notes?: string | null
+          opted_out?: boolean
+          opted_out_at?: string | null
           outreach_attempts?: number
           outreach_channel?: string | null
           outreach_status?: string
@@ -446,6 +460,10 @@ export type Database = {
           phone?: string | null
           queued_at?: string | null
           reply_detected?: boolean
+          sequence_step?: number
+          sms_consent?: boolean
+          sms_consent_at?: string | null
+          sms_consent_source?: string | null
           source?: string
           status?: string
           stop_outreach?: boolean
@@ -465,7 +483,12 @@ export type Database = {
           lead_score?: number | null
           location?: string | null
           next_follow_up_at?: string | null
+          norm_domain?: string | null
+          norm_email?: string | null
+          norm_phone?: string | null
           notes?: string | null
+          opted_out?: boolean
+          opted_out_at?: string | null
           outreach_attempts?: number
           outreach_channel?: string | null
           outreach_status?: string
@@ -473,6 +496,10 @@ export type Database = {
           phone?: string | null
           queued_at?: string | null
           reply_detected?: boolean
+          sequence_step?: number
+          sms_consent?: boolean
+          sms_consent_at?: string | null
+          sms_consent_source?: string | null
           source?: string
           status?: string
           stop_outreach?: boolean
@@ -547,6 +574,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      sms_suppressions: {
+        Row: {
+          created_at: string
+          detail: string | null
+          id: string
+          phone: string
+          reason: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: string | null
+          id?: string
+          phone: string
+          reason?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          detail?: string | null
+          id?: string
+          phone?: string
+          reason?: string
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {

@@ -48,6 +48,10 @@ type LeadRow = {
   lead_score: number | null;
   source: string | null;
   outreach_channel: string | null;
+  outreach_status: string;
+  stop_outreach: boolean;
+  opted_out: boolean;
+  next_follow_up_at: string | null;
 };
 
 function DashboardPage() {
@@ -168,7 +172,18 @@ function DashboardPage() {
     const meetingsSet = leads.filter((l) => l.status === "MEETING SET").length;
     const contacted = leads.filter((l) => ["CONTACTED", "REPLIED", "MEETING SET", "CLIENT"].includes(l.status)).length;
     const won = leads.filter((l) => l.status === "CLIENT").length;
-    return { total, emails, phones, ready, replies, meetingsSet, contacted, won };
+    const now = Date.now();
+    const queued = leads.filter((l) => l.outreach_status === "QUEUED" && !l.stop_outreach).length;
+    const inOutreach = leads.filter((l) => l.outreach_status === "CONTACTED" && !l.stop_outreach).length;
+    const followUpsDue = leads.filter(
+      (l) =>
+        !l.stop_outreach &&
+        l.outreach_status === "CONTACTED" &&
+        !!l.next_follow_up_at &&
+        new Date(l.next_follow_up_at).getTime() <= now,
+    ).length;
+    const optedOut = leads.filter((l) => l.opted_out || l.stop_outreach).length;
+    return { total, emails, phones, ready, replies, meetingsSet, contacted, won, queued, inOutreach, followUpsDue, optedOut };
   }, [leads]);
 
   const upcoming = useMemo(() => {
@@ -286,6 +301,13 @@ function DashboardPage() {
         <KpiCard label="Ready to contact" value={kpis.ready} icon={Send} tone="gold" />
         <KpiCard label="Replies" value={kpis.replies} icon={MessageSquare} hint={`${kpis.won} converted to clients`} />
         <KpiCard label="Meetings set" value={kpis.meetingsSet} icon={CalendarCheck} hint={`${upcoming.length} upcoming`} />
+      </section>
+
+      <section className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard label="Queued for outreach" value={kpis.queued} icon={Send} tone="gold" />
+        <KpiCard label="In outreach" value={kpis.inOutreach} icon={MessageSquare} hint="Contacted, awaiting reply" />
+        <KpiCard label="Follow-ups due" value={kpis.followUpsDue} icon={CalendarCheck} />
+        <KpiCard label="Opted out / stopped" value={kpis.optedOut} icon={Target} />
       </section>
 
       <section className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
