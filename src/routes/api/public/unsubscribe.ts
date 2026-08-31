@@ -27,7 +27,13 @@ export const Route = createFileRoute("/api/public/unsubscribe")({
           .insert({ user_id: parsed.userId, email: parsed.email, reason: "UNSUBSCRIBE" });
         await supabaseAdmin
           .from("leads")
-          .update({ stop_outreach: true, outreach_status: "STOPPED", next_follow_up_at: null })
+          .update({
+            stop_outreach: true,
+            opted_out: true,
+            opted_out_at: new Date().toISOString(),
+            outreach_status: "STOPPED",
+            next_follow_up_at: null,
+          })
           .eq("user_id", parsed.userId)
           .ilike("email", parsed.email);
         await supabaseAdmin.from("automation_logs").insert({
