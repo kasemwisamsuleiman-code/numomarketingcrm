@@ -48,6 +48,10 @@ type LeadRow = {
   lead_score: number | null;
   source: string | null;
   outreach_channel: string | null;
+  outreach_status: string;
+  stop_outreach: boolean;
+  opted_out: boolean;
+  next_follow_up_at: string | null;
 };
 
 function DashboardPage() {
