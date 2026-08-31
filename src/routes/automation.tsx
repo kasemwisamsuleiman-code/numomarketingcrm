@@ -19,8 +19,11 @@ import {
   applyMeetingSet,
   findDuplicateIds,
   isFollowUpDue,
+  isEligibleForOutreach,
   markReplied,
+  optOutLead,
   queueLead,
+  setSmsConsent,
   setStopOutreach,
   simulateFollowUp,
   simulateSend,
@@ -100,10 +103,8 @@ function AutomationPage() {
     liveEmail &&
     (lead.outreach_channel ?? "EMAIL") === "EMAIL" &&
     isValidEmail(lead.email) &&
-    !lead.stop_outreach &&
-    !lead.reply_detected &&
-    !isSuppressed(lead) &&
-    !["REPLIED", "MEETING SET", "CLIENT", "NOT INTERESTED"].includes(lead.status);
+    isEligibleForOutreach(lead, "EMAIL") &&
+    !isSuppressed(lead);
 
   const sendReal = useMutation({
     mutationFn: async ({ lead, kind }: { lead: OutreachLead; kind: EmailKind }) =>
@@ -183,7 +184,7 @@ function AutomationPage() {
     const now = Date.now();
     return {
       eligible: filtered.filter(
-        (l) => !l.stop_outreach && l.outreach_status === "NOT_QUEUED" && ["READY", "PENDING"].includes(l.status),
+        (l) => l.outreach_status === "NOT_QUEUED" && isEligibleForOutreach(l, channel) && ["READY", "PENDING"].includes(l.status),
       ),
       queue: filtered.filter((l) => l.outreach_status === "QUEUED" && !l.stop_outreach),
       contacted: filtered.filter((l) => l.outreach_status === "CONTACTED"),
@@ -191,7 +192,7 @@ function AutomationPage() {
       followups: filtered.filter((l) => isFollowUpDue(l, now)),
       stopped: filtered.filter((l) => l.stop_outreach),
     };
-  }, [filtered]);
+  }, [filtered, channel]);
 
   const kpis = {
     queued: leads.filter((l) => l.outreach_status === "QUEUED" && !l.stop_outreach).length,
@@ -298,10 +299,36 @@ function AutomationPage() {
           Converted
         </Button>
       ) : null}
+      {lead.phone ? (
+        <Button
+          size="sm"
+          variant="outline"
+          className="rounded-full border-gold/40"
+          onClick={() =>
+            run(
+              lead.sms_consent ? `SMS consent revoked for ${lead.business_name}` : `SMS consent recorded for ${lead.business_name}`,
+              () => setSmsConsent(user!.id, lead, !lead.sms_consent, "Manually recorded by owner"),
+            )
+          }
+        >
+          {lead.sms_consent ? "Revoke SMS consent" : "Record SMS consent"}
+        </Button>
+      ) : null}
+      {!lead.opted_out ? (
+        <Button
+          size="sm"
+          variant="outline"
+          className="rounded-full border-destructive/40 text-destructive"
+          onClick={() => run(`${lead.business_name} opted out`, () => optOutLead(user!.id, lead, "Manual opt-out"))}
+        >
+          <ShieldAlert className="mr-1 size-3.5" /> Opt out
+        </Button>
+      ) : null}
       <Button
         size="sm"
         variant="outline"
         className="rounded-full border-gold/40"
+        disabled={lead.opted_out && lead.stop_outreach}
         onClick={() =>
           run(
             lead.stop_outreach ? `${lead.business_name} resumed` : `${lead.business_name} stopped`,
@@ -327,6 +354,7 @@ function AutomationPage() {
               <th className="px-4 py-4 text-left">Contact</th>
               <th className="px-4 py-4 text-left">Channel</th>
               <th className="px-4 py-4 text-left">Outreach</th>
+              <th className="px-4 py-4 text-left">Step</th>
               <th className="px-4 py-4 text-left">Tracker</th>
               <th className="px-4 py-4 text-left">Last contacted</th>
               <th className="px-4 py-4 text-left">Next follow-up</th>
