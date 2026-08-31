@@ -32,6 +32,19 @@ export function EmailOutreachSettings() {
   const [form, setForm] = useState<EmailSettings | null>(null);
   const [testTo, setTestTo] = useState("");
   const [suppressTarget, setSuppressTarget] = useState("");
+  const [delivery, setDelivery] = useState<Record<string, string>>({});
+
+  const checkDelivery = useMutation({
+    mutationFn: async (messageId: string) => ({
+      messageId,
+      result: await getEmailDeliveryStatus({ data: { messageId } }),
+    }),
+    onSuccess: ({ messageId, result }) => {
+      setDelivery((prev) => ({ ...prev, [messageId]: result.lastEvent }));
+      if (!result.ok && result.detail) toast.error(result.detail);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const { data: status } = useQuery({
     queryKey: ["email-provider-status"],
