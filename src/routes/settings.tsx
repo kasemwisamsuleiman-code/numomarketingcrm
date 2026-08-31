@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { getLeadGenStatus } from "@/lib/leadgen.functions";
+import { EmailOutreachSettings } from "@/components/crm/EmailOutreachSettings";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -164,6 +165,8 @@ function SettingsPage() {
         </p>
 
       </section>
+
+      <EmailOutreachSettings />
 
       <section className="mt-8">
         <div className="mb-3 flex items-center gap-2">
