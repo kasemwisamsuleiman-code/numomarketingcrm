@@ -458,6 +458,9 @@ function AutomationPage() {
         <KpiCard label="Stopped" value={kpis.stopped} />
       </div>
 
+      <EmailOutreachSettings />
+
+
       <div className="panel mt-6 flex flex-col gap-3 p-4 lg:flex-row lg:items-center">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
