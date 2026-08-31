@@ -413,6 +413,7 @@ export function EmailOutreachSettings() {
                   <th>Type</th>
                   <th>Attempt</th>
                   <th>Status</th>
+                  <th>Delivery</th>
                   <th>Message ID</th>
                 </tr>
               </thead>
@@ -427,6 +428,26 @@ export function EmailOutreachSettings() {
                     <td className="pr-3">
                       <span className={s.status === "SENT" ? "text-success" : "text-destructive"}>{s.status}</span>
                       {s.error ? <span className="block text-muted-foreground">{s.error}</span> : null}
+                    </td>
+                    <td className="pr-3">
+                      {s.provider_message_id ? (
+                        delivery[s.provider_message_id] ? (
+                          <span className="capitalize">{delivery[s.provider_message_id]}</span>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-[11px]"
+                            disabled={checkDelivery.isPending}
+                            onClick={() => checkDelivery.mutate(s.provider_message_id!)}
+                          >
+                            Check
+                          </Button>
+                        )
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className="text-muted-foreground">{s.provider_message_id ?? "—"}</td>
                   </tr>
