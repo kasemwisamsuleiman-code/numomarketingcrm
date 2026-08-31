@@ -22,6 +22,7 @@ import { StatusPill } from "@/components/crm/StatusPill";
 import { LEAD_STATUSES, formatDate, normalizeKey, normalizePhone, type LeadStatus } from "@/lib/crm";
 import { downloadCsv, parseCsv, toCsv } from "@/lib/csv";
 import { applyConverted } from "@/lib/outreach";
+import { findDuplicateIds, isDuplicateOf } from "@/lib/dedupe";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -257,27 +258,7 @@ function LeadsPage() {
     [leads],
   );
 
-  const duplicateIds = useMemo(() => {
-    const seen = new Map<string, string>();
-    const dupes = new Set<string>();
-    for (const l of leads) {
-      const keys = [
-        `n:${normalizeKey(l.business_name)}|${normalizeKey(l.location)}`,
-        l.email ? `e:${normalizeKey(l.email)}` : "",
-        normalizePhone(l.phone).length >= 7 ? `p:${normalizePhone(l.phone)}` : "",
-      ].filter(Boolean);
-      for (const k of keys) {
-        const prev = seen.get(k);
-        if (prev) {
-          dupes.add(prev);
-          dupes.add(l.id);
-        } else {
-          seen.set(k, l.id);
-        }
-      }
-    }
-    return dupes;
-  }, [leads]);
+  const duplicateIds = useMemo(() => findDuplicateIds(leads), [leads]);
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -340,16 +321,10 @@ function LeadsPage() {
 
   const potentialDuplicate = useMemo(() => {
     if (!form.business_name.trim()) return null;
-    return (
-      leads.find(
-        (l) =>
-          l.id !== editing?.id &&
-          (normalizeKey(l.business_name) === normalizeKey(form.business_name) ||
-            (!!form.email && normalizeKey(l.email) === normalizeKey(form.email)) ||
-            (normalizePhone(form.phone).length >= 7 && normalizePhone(l.phone) === normalizePhone(form.phone))),
-      ) ?? null
-    );
-  }, [leads, form.business_name, form.email, form.phone, editing]);
+    return isDuplicateOf(form, leads, editing?.id)
+      ? (leads.find((l) => l.id !== editing?.id && isDuplicateOf(form, [l])) ?? null)
+      : null;
+  }, [leads, form, editing]);
 
   const sortBtn = (key: SortKey, label: string) => (
     <button
