@@ -17,7 +17,12 @@ import {
   isValidEmail,
   type EmailSettings,
 } from "@/lib/email-template";
-import { getEmailProviderStatus, sendTestEmail, suppressEmail } from "@/lib/email.functions";
+import {
+  getEmailDeliveryStatus,
+  getEmailProviderStatus,
+  sendTestEmail,
+  suppressEmail,
+} from "@/lib/email.functions";
 
 const SAMPLE_LEAD = {
   business_name: "Rosa's Family Diner",
