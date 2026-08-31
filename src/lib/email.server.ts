@@ -138,3 +138,21 @@ export async function readUnsubscribeToken(token: string): Promise<{ userId: str
     return null;
   }
 }
+
+/** Look up a single message's delivery outcome (delivered / bounced / complained / etc). */
+export async function fetchEmailDelivery(
+  messageId: string,
+): Promise<{ ok: boolean; lastEvent: string; detail?: string }> {
+  const { lovableKey, connectionKey } = creds();
+  if (!lovableKey || !connectionKey) return { ok: false, lastEvent: "unknown", detail: "Email provider is not connected." };
+  const res = await fetch(`${GATEWAY}/emails/${encodeURIComponent(messageId)}`, {
+    headers: gatewayHeaders(lovableKey, connectionKey),
+  });
+  const raw = await res.text();
+  if (!res.ok) {
+    console.error(`[resend] status lookup failed [${res.status}]: ${raw}`);
+    return { ok: false, lastEvent: "unknown", detail: `Provider returned ${res.status}: ${raw.slice(0, 300)}` };
+  }
+  const json = JSON.parse(raw) as { last_event?: string };
+  return { ok: true, lastEvent: json.last_event ?? "unknown" };
+}
