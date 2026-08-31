@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Send, Repeat, MessageSquare, Ban, Play, ListPlus, X, ShieldAlert } from "lucide-react";
+import { Search, Send, Repeat, MessageSquare, Ban, Play, ListPlus, X, ShieldAlert, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -33,6 +33,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { buildEmail, isValidEmail, type EmailKind, type EmailSettings } from "@/lib/email-template";
+import { sendLeadEmail } from "@/lib/email.functions";
 
 export const Route = createFileRoute("/automation")({
   head: () => ({
@@ -70,6 +73,54 @@ function AutomationPage() {
   const [search, setSearch] = useState("");
   const [channel, setChannel] = useState<OutreachChannel>("EMAIL");
   const [tab, setTab] = useState<Tab>("eligible");
+  const [sendTarget, setSendTarget] = useState<{ lead: OutreachLead; kind: EmailKind } | null>(null);
+
+  const { data: emailSettings } = useQuery({
+    queryKey: ["email-settings", user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("email_settings").select("*").eq("user_id", user!.id).maybeSingle();
+      if (error) throw error;
+      return (data as unknown as EmailSettings) ?? null;
+    },
+  });
+
+  const { data: suppressed = [] } = useQuery({
+    queryKey: ["email-suppressions"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("email_suppressions").select("email");
+      if (error) throw error;
+      return data.map((r) => r.email.toLowerCase());
+    },
+  });
+
+  const liveEmail = Boolean(emailSettings?.live_enabled);
+  const isSuppressed = (lead: OutreachLead) => suppressed.includes((lead.email ?? "").trim().toLowerCase());
+  const canSendReal = (lead: OutreachLead) =>
+    liveEmail &&
+    (lead.outreach_channel ?? "EMAIL") === "EMAIL" &&
+    isValidEmail(lead.email) &&
+    !lead.stop_outreach &&
+    !lead.reply_detected &&
+    !isSuppressed(lead) &&
+    !["REPLIED", "MEETING SET", "CLIENT", "NOT INTERESTED"].includes(lead.status);
+
+  const sendReal = useMutation({
+    mutationFn: async ({ lead, kind }: { lead: OutreachLead; kind: EmailKind }) =>
+      sendLeadEmail({ data: { leadId: lead.id, kind } }),
+    onSuccess: (r) => {
+      setSendTarget(null);
+      refresh();
+      qc.invalidateQueries({ queryKey: ["email-sends"] });
+      toast.success(`Email sent to ${r.to} (id ${r.messageId})`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const sendPreview = useMemo(
+    () => (sendTarget && emailSettings ? buildEmail(emailSettings, sendTarget.lead, sendTarget.kind) : null),
+    [sendTarget, emailSettings],
+  );
 
   const { data: leads = [], isLoading } = useQuery({
     queryKey: ["outreach-leads"],
@@ -173,6 +224,15 @@ function AutomationPage() {
           >
             <Send className="mr-1 size-3.5" /> Test send
           </Button>
+          {canSendReal(lead) ? (
+            <Button
+              size="sm"
+              className="rounded-full bg-gold text-gold-foreground hover:bg-gold/90"
+              onClick={() => setSendTarget({ lead, kind: "INITIAL" })}
+            >
+              <Mail className="mr-1 size-3.5" /> Send email
+            </Button>
+          ) : null}
           <Button
             size="sm"
             variant="outline"
@@ -191,6 +251,15 @@ function AutomationPage() {
           onClick={() => run(`Simulated follow-up for ${lead.business_name}`, () => simulateFollowUp(user!.id, lead))}
         >
           <Repeat className="mr-1 size-3.5" /> Test follow-up
+        </Button>
+      ) : null}
+      {lead.outreach_status === "CONTACTED" && canSendReal(lead) ? (
+        <Button
+          size="sm"
+          className="rounded-full bg-gold text-gold-foreground hover:bg-gold/90"
+          onClick={() => setSendTarget({ lead, kind: "FOLLOW_UP" })}
+        >
+          <Mail className="mr-1 size-3.5" /> Send follow-up
         </Button>
       ) : null}
       {!lead.reply_detected && lead.outreach_status === "CONTACTED" ? (
@@ -333,10 +402,18 @@ function AutomationPage() {
     >
       <div className="panel mb-6 flex items-start gap-3 border-gold/40 bg-gold-soft/60 p-4 text-sm">
         <ShieldAlert className="mt-0.5 size-4 text-gold-foreground" />
-        <p className="text-muted-foreground">
-          <span className="font-semibold text-foreground">Dry-run mode.</span> No email or SMS provider is connected.
-          Every “test” control below only moves the lead through the pipeline and writes an automation log entry.
-        </p>
+        {liveEmail ? (
+          <p className="text-muted-foreground">
+            <span className="font-semibold text-foreground">Live email sending is ON.</span> “Send email” delivers a real
+            message to one lead at a time and only marks the lead CONTACTED when the provider accepts it. Every “test”
+            control stays simulation-only, and SMS is not connected.
+          </p>
+        ) : (
+          <p className="text-muted-foreground">
+            <span className="font-semibold text-foreground">Dry-run mode.</span> Live email outreach is disabled in
+            Settings, so every control below only moves the lead through the pipeline and writes an automation log entry.
+          </p>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -450,6 +527,36 @@ function AutomationPage() {
           </TableShell>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={Boolean(sendTarget)} onOpenChange={(open) => (open ? null : setSendTarget(null))}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>
+              Send a real {sendTarget?.kind === "FOLLOW_UP" ? "follow-up" : "first"} email
+            </DialogTitle>
+            <DialogDescription>
+              This sends immediately to {sendTarget?.lead.email} via your connected email provider.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Subject</p>
+            <p className="mt-1 text-sm font-semibold">{sendPreview?.subject}</p>
+            <p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{sendPreview?.body}</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-full" onClick={() => setSendTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              className="rounded-full bg-ink text-ink-foreground hover:bg-ink/90"
+              disabled={sendReal.isPending || !sendTarget}
+              onClick={() => sendTarget && sendReal.mutate(sendTarget)}
+            >
+              {sendReal.isPending ? "Sending…" : "Confirm and send"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }
