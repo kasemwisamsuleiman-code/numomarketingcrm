@@ -19,10 +19,10 @@ import { RequireAuth } from "@/components/crm/RequireAuth";
 import { AppShell, EmptyState, TableShell } from "@/components/crm/AppShell";
 import { KpiCard } from "@/components/crm/KpiCard";
 import { StatusPill } from "@/components/crm/StatusPill";
-import { LEAD_STATUSES, formatDate, normalizeKey, normalizePhone, type LeadStatus } from "@/lib/crm";
+import { LEAD_STATUSES, formatDate, type LeadStatus } from "@/lib/crm";
 import { downloadCsv, parseCsv, toCsv } from "@/lib/csv";
 import { applyConverted } from "@/lib/outreach";
-import { findDuplicateIds, isDuplicateOf } from "@/lib/dedupe";
+import { dedupeKeys, findDuplicateIds, isDuplicateOf } from "@/lib/dedupe";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -161,7 +161,7 @@ function LeadsPage() {
     mutationFn: async (text: string) => {
       const rows = parseCsv(text);
       if (rows.length === 0) throw new Error("No rows found in that CSV.");
-      const existing = new Set(leads.map((l) => normalizeKey(l.business_name)));
+      const existing = new Set(leads.flatMap((l) => dedupeKeys(l)));
       const payload: Record<string, unknown>[] = [];
       let skipped = 0;
       for (const r of rows) {
@@ -170,11 +170,18 @@ function LeadsPage() {
           skipped++;
           continue;
         }
-        if (existing.has(normalizeKey(name))) {
+        const keys = dedupeKeys({
+          business_name: name,
+          location: r["location"] ?? null,
+          phone: r["phone"] ?? null,
+          email: r["email"] ?? null,
+          website: r["website"] ?? null,
+        });
+        if (keys.some((k) => existing.has(k))) {
           skipped++;
           continue;
         }
-        existing.add(normalizeKey(name));
+        for (const k of keys) existing.add(k);
         const status = (r["status"] || r["outreach_status"] || "READY").toUpperCase();
         payload.push({
           user_id: user!.id,
