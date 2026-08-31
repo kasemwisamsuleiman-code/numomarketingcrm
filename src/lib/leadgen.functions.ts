@@ -1,3 +1,4 @@
+import { dedupeKeys } from "@/lib/dedupe";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
@@ -165,14 +166,18 @@ export const advanceLeadGeneration = createServerFn({ method: "POST" })
         offRegion += 1;
         return false;
       });
-      const { data: existing, error: existingError } = await supabase.from("leads").select("business_name");
+      const { data: existing, error: existingError } = await supabase
+        .from("leads")
+        .select("business_name, location, phone, email, website");
       if (existingError) throw new Error(existingError.message);
-      const seen = new Set((existing ?? []).map((row) => pipeline.normalizeName(String(row.business_name))));
+      // Duplicate protection: business name (+location) plus phone / email / website host.
+      const seen = new Set<string>();
+      for (const row of existing ?? []) for (const key of dedupeKeys(row)) seen.add(key);
       let duplicates = 0;
       const rows = qualified.filter((lead) => {
-        const key = pipeline.normalizeName(lead.business_name);
-        if (seen.has(key)) { duplicates += 1; return false; }
-        seen.add(key);
+        const keys = dedupeKeys(lead);
+        if (keys.some((k) => seen.has(k))) { duplicates += 1; return false; }
+        for (const k of keys) seen.add(k);
         return true;
       }).slice(0, remainingTarget).map((lead) => ({
         user_id: userId,

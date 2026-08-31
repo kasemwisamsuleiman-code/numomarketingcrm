@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AutomationRouteImport } from './routes/automation'
 import { Route as ClientsRouteImport } from './routes/clients'
 import { Route as GeneratorRouteImport } from './routes/generator'
 import { Route as InvoicesRouteImport } from './routes/invoices'
@@ -26,6 +27,11 @@ const IndexRoute = IndexRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AutomationRoute = AutomationRouteImport.update({
+  id: '/automation',
+  path: '/automation',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ClientsRoute = ClientsRouteImport.update({
@@ -62,6 +68,7 @@ const SettingsRoute = SettingsRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/automation': typeof AutomationRoute
   '/clients': typeof ClientsRoute
   '/generator': typeof GeneratorRoute
   '/invoices': typeof InvoicesRoute
@@ -72,6 +79,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/automation': typeof AutomationRoute
   '/clients': typeof ClientsRoute
   '/generator': typeof GeneratorRoute
   '/invoices': typeof InvoicesRoute
@@ -83,6 +91,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/automation': typeof AutomationRoute
   '/clients': typeof ClientsRoute
   '/generator': typeof GeneratorRoute
   '/invoices': typeof InvoicesRoute
@@ -95,6 +104,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/automation'
     | '/clients'
     | '/generator'
     | '/invoices'
@@ -105,6 +115,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/automation'
     | '/clients'
     | '/generator'
     | '/invoices'
@@ -115,6 +126,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/auth'
+    | '/automation'
     | '/clients'
     | '/generator'
     | '/invoices'
@@ -126,6 +138,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
+  AutomationRoute: typeof AutomationRoute
   ClientsRoute: typeof ClientsRoute
   GeneratorRoute: typeof GeneratorRoute
   InvoicesRoute: typeof InvoicesRoute
@@ -148,6 +161,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/automation': {
+      id: '/automation'
+      path: '/automation'
+      fullPath: '/automation'
+      preLoaderRoute: typeof AutomationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/clients': {
@@ -198,6 +218,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
+  AutomationRoute: AutomationRoute,
   ClientsRoute: ClientsRoute,
   GeneratorRoute: GeneratorRoute,
   InvoicesRoute: InvoicesRoute,

@@ -19,8 +19,10 @@ import { RequireAuth } from "@/components/crm/RequireAuth";
 import { AppShell, EmptyState, TableShell } from "@/components/crm/AppShell";
 import { KpiCard } from "@/components/crm/KpiCard";
 import { StatusPill } from "@/components/crm/StatusPill";
-import { LEAD_STATUSES, formatDate, normalizeKey, normalizePhone, type LeadStatus } from "@/lib/crm";
+import { LEAD_STATUSES, formatDate, type LeadStatus } from "@/lib/crm";
 import { downloadCsv, parseCsv, toCsv } from "@/lib/csv";
+import { applyConverted } from "@/lib/outreach";
+import { dedupeKeys, findDuplicateIds, isDuplicateOf } from "@/lib/dedupe";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -159,7 +161,7 @@ function LeadsPage() {
     mutationFn: async (text: string) => {
       const rows = parseCsv(text);
       if (rows.length === 0) throw new Error("No rows found in that CSV.");
-      const existing = new Set(leads.map((l) => normalizeKey(l.business_name)));
+      const existing = new Set(leads.flatMap((l) => dedupeKeys(l)));
       const payload: Record<string, unknown>[] = [];
       let skipped = 0;
       for (const r of rows) {
@@ -168,11 +170,18 @@ function LeadsPage() {
           skipped++;
           continue;
         }
-        if (existing.has(normalizeKey(name))) {
+        const keys = dedupeKeys({
+          business_name: name,
+          location: r["location"] ?? null,
+          phone: r["phone"] ?? null,
+          email: r["email"] ?? null,
+          website: r["website"] ?? null,
+        });
+        if (keys.some((k) => existing.has(k))) {
           skipped++;
           continue;
         }
-        existing.add(normalizeKey(name));
+        for (const k of keys) existing.add(k);
         const status = (r["status"] || r["outreach_status"] || "READY").toUpperCase();
         payload.push({
           user_id: user!.id,
@@ -216,12 +225,14 @@ function LeadsPage() {
         notes: lead.notes,
       });
       if (cErr) throw cErr;
-      const { error: lErr } = await supabase.from("leads").update({ status: "CLIENT" }).eq("id", lead.id);
-      if (lErr) throw lErr;
+      // Conversion is terminal for outreach: CLIENT + stop-outreach + logged.
+      await applyConverted(user!.id, lead.id, lead.business_name);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["leads"] });
       qc.invalidateQueries({ queryKey: ["clients"] });
+      qc.invalidateQueries({ queryKey: ["outreach-leads"] });
+      qc.invalidateQueries({ queryKey: ["automation-logs"] });
       toast.success("Lead converted to client");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -254,27 +265,7 @@ function LeadsPage() {
     [leads],
   );
 
-  const duplicateIds = useMemo(() => {
-    const seen = new Map<string, string>();
-    const dupes = new Set<string>();
-    for (const l of leads) {
-      const keys = [
-        `n:${normalizeKey(l.business_name)}|${normalizeKey(l.location)}`,
-        l.email ? `e:${normalizeKey(l.email)}` : "",
-        normalizePhone(l.phone).length >= 7 ? `p:${normalizePhone(l.phone)}` : "",
-      ].filter(Boolean);
-      for (const k of keys) {
-        const prev = seen.get(k);
-        if (prev) {
-          dupes.add(prev);
-          dupes.add(l.id);
-        } else {
-          seen.set(k, l.id);
-        }
-      }
-    }
-    return dupes;
-  }, [leads]);
+  const duplicateIds = useMemo(() => findDuplicateIds(leads), [leads]);
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -337,16 +328,10 @@ function LeadsPage() {
 
   const potentialDuplicate = useMemo(() => {
     if (!form.business_name.trim()) return null;
-    return (
-      leads.find(
-        (l) =>
-          l.id !== editing?.id &&
-          (normalizeKey(l.business_name) === normalizeKey(form.business_name) ||
-            (!!form.email && normalizeKey(l.email) === normalizeKey(form.email)) ||
-            (normalizePhone(form.phone).length >= 7 && normalizePhone(l.phone) === normalizePhone(form.phone))),
-      ) ?? null
-    );
-  }, [leads, form.business_name, form.email, form.phone, editing]);
+    return isDuplicateOf(form, leads, editing?.id)
+      ? (leads.find((l) => l.id !== editing?.id && isDuplicateOf(form, [l])) ?? null)
+      : null;
+  }, [leads, form, editing]);
 
   const sortBtn = (key: SortKey, label: string) => (
     <button

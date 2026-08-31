@@ -10,10 +10,54 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
+      automation_logs: {
+        Row: {
+          action: string
+          channel: string | null
+          created_at: string
+          detail: string | null
+          id: string
+          lead_id: string | null
+          lead_name: string
+          result: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          channel?: string | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          lead_id?: string | null
+          lead_name?: string
+          result?: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          channel?: string | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          lead_id?: string | null
+          lead_name?: string
+          result?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_logs_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           address: string | null
@@ -214,14 +258,21 @@ export type Database = {
           date_added: string
           email: string | null
           id: string
+          last_contacted_at: string | null
           lead_score: number | null
           location: string | null
+          next_follow_up_at: string | null
           notes: string | null
+          outreach_attempts: number
           outreach_channel: string | null
+          outreach_status: string
           personalized_line: string | null
           phone: string | null
+          queued_at: string | null
+          reply_detected: boolean
           source: string
           status: string
+          stop_outreach: boolean
           updated_at: string
           user_id: string
           website: string | null
@@ -234,14 +285,21 @@ export type Database = {
           date_added?: string
           email?: string | null
           id?: string
+          last_contacted_at?: string | null
           lead_score?: number | null
           location?: string | null
+          next_follow_up_at?: string | null
           notes?: string | null
+          outreach_attempts?: number
           outreach_channel?: string | null
+          outreach_status?: string
           personalized_line?: string | null
           phone?: string | null
+          queued_at?: string | null
+          reply_detected?: boolean
           source?: string
           status?: string
+          stop_outreach?: boolean
           updated_at?: string
           user_id: string
           website?: string | null
@@ -254,14 +312,21 @@ export type Database = {
           date_added?: string
           email?: string | null
           id?: string
+          last_contacted_at?: string | null
           lead_score?: number | null
           location?: string | null
+          next_follow_up_at?: string | null
           notes?: string | null
+          outreach_attempts?: number
           outreach_channel?: string | null
+          outreach_status?: string
           personalized_line?: string | null
           phone?: string | null
+          queued_at?: string | null
+          reply_detected?: boolean
           source?: string
           status?: string
+          stop_outreach?: boolean
           updated_at?: string
           user_id?: string
           website?: string | null

@@ -9,6 +9,7 @@ import { RequireAuth } from "@/components/crm/RequireAuth";
 import { AppShell, EmptyState, TableShell } from "@/components/crm/AppShell";
 import { KpiCard } from "@/components/crm/KpiCard";
 import { StatusPill } from "@/components/crm/StatusPill";
+import { applyMeetingSet } from "@/lib/outreach";
 import { MEETING_STATUSES, formatDateTime, toLocalInputValue, type MeetingStatus } from "@/lib/crm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -126,12 +127,21 @@ function MeetingsPage() {
         const { error } = await supabase.from("meetings").insert({ ...row, user_id: user!.id });
         if (error) throw error;
       }
+      // Booking a meeting for a lead advances the pipeline and stops outreach.
+      if (row.lead_id) {
+        const name = leads.find((l) => l.id === row.lead_id)?.business_name ?? payload.title;
+        await applyMeetingSet(user!.id, row.lead_id, name);
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["meetings"] });
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      qc.invalidateQueries({ queryKey: ["outreach-leads"] });
+      qc.invalidateQueries({ queryKey: ["automation-logs"] });
       setOpen(false);
       toast.success(editing ? "Meeting updated" : "Meeting scheduled");
     },
+
     onError: (e: Error) => toast.error(e.message),
   });
 
