@@ -21,6 +21,7 @@ import { KpiCard } from "@/components/crm/KpiCard";
 import { StatusPill } from "@/components/crm/StatusPill";
 import { LEAD_STATUSES, formatDate, normalizeKey, normalizePhone, type LeadStatus } from "@/lib/crm";
 import { downloadCsv, parseCsv, toCsv } from "@/lib/csv";
+import { applyConverted } from "@/lib/outreach";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -216,12 +217,14 @@ function LeadsPage() {
         notes: lead.notes,
       });
       if (cErr) throw cErr;
-      const { error: lErr } = await supabase.from("leads").update({ status: "CLIENT" }).eq("id", lead.id);
-      if (lErr) throw lErr;
+      // Conversion is terminal for outreach: CLIENT + stop-outreach + logged.
+      await applyConverted(user!.id, lead.id, lead.business_name);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["leads"] });
       qc.invalidateQueries({ queryKey: ["clients"] });
+      qc.invalidateQueries({ queryKey: ["outreach-leads"] });
+      qc.invalidateQueries({ queryKey: ["automation-logs"] });
       toast.success("Lead converted to client");
     },
     onError: (e: Error) => toast.error(e.message),

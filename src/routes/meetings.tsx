@@ -9,6 +9,7 @@ import { RequireAuth } from "@/components/crm/RequireAuth";
 import { AppShell, EmptyState, TableShell } from "@/components/crm/AppShell";
 import { KpiCard } from "@/components/crm/KpiCard";
 import { StatusPill } from "@/components/crm/StatusPill";
+import { applyMeetingSet } from "@/lib/outreach";
 import { MEETING_STATUSES, formatDateTime, toLocalInputValue, type MeetingStatus } from "@/lib/crm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
