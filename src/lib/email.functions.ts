@@ -298,3 +298,25 @@ export const suppressEmail = createServerFn({ method: "POST" })
       .ilike("email", data.email);
     return { ok: true };
   });
+
+/** Delivery outcome for one already-sent message (delivered, bounced, complained, ...). */
+export const getEmailDeliveryStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { messageId: string }) => {
+    const messageId = String(input?.messageId ?? "").trim();
+    if (!messageId) throw new Error("Message id is required.");
+    return { messageId };
+  })
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: row, error } = await supabase
+      .from("email_sends")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("provider_message_id", data.messageId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!row) throw new Error("That message is not part of this workspace.");
+    const { fetchEmailDelivery } = await import("./email.server");
+    return fetchEmailDelivery(data.messageId);
+  });

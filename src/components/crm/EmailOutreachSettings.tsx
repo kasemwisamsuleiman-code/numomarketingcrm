@@ -17,7 +17,12 @@ import {
   isValidEmail,
   type EmailSettings,
 } from "@/lib/email-template";
-import { getEmailProviderStatus, sendTestEmail, suppressEmail } from "@/lib/email.functions";
+import {
+  getEmailDeliveryStatus,
+  getEmailProviderStatus,
+  sendTestEmail,
+  suppressEmail,
+} from "@/lib/email.functions";
 
 const SAMPLE_LEAD = {
   business_name: "Rosa's Family Diner",
@@ -32,6 +37,19 @@ export function EmailOutreachSettings() {
   const [form, setForm] = useState<EmailSettings | null>(null);
   const [testTo, setTestTo] = useState("");
   const [suppressTarget, setSuppressTarget] = useState("");
+  const [delivery, setDelivery] = useState<Record<string, string>>({});
+
+  const checkDelivery = useMutation({
+    mutationFn: async (messageId: string) => ({
+      messageId,
+      result: await getEmailDeliveryStatus({ data: { messageId } }),
+    }),
+    onSuccess: ({ messageId, result }) => {
+      setDelivery((prev) => ({ ...prev, [messageId]: result.lastEvent }));
+      if (!result.ok && result.detail) toast.error(result.detail);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const { data: status } = useQuery({
     queryKey: ["email-provider-status"],
@@ -413,6 +431,7 @@ export function EmailOutreachSettings() {
                   <th>Type</th>
                   <th>Attempt</th>
                   <th>Status</th>
+                  <th>Delivery</th>
                   <th>Message ID</th>
                 </tr>
               </thead>
@@ -427,6 +446,26 @@ export function EmailOutreachSettings() {
                     <td className="pr-3">
                       <span className={s.status === "SENT" ? "text-success" : "text-destructive"}>{s.status}</span>
                       {s.error ? <span className="block text-muted-foreground">{s.error}</span> : null}
+                    </td>
+                    <td className="pr-3">
+                      {s.provider_message_id ? (
+                        delivery[s.provider_message_id] ? (
+                          <span className="capitalize">{delivery[s.provider_message_id]}</span>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-[11px]"
+                            disabled={checkDelivery.isPending}
+                            onClick={() => checkDelivery.mutate(s.provider_message_id!)}
+                          >
+                            Check
+                          </Button>
+                        )
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className="text-muted-foreground">{s.provider_message_id ?? "—"}</td>
                   </tr>
