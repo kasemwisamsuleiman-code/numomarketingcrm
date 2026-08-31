@@ -419,7 +419,7 @@ function AutomationPage() {
   return (
     <AppShell
       title="Outreach Automation"
-      subtitle="Queue leads, simulate the outreach lifecycle and audit every automation event. Simulation only — no email or SMS is ever sent in this phase."
+      subtitle="Queue leads, manage email outreach and audit every automation event. Bulk sending stays off — real emails go out one lead at a time, only when live email is enabled."
       actions={
         <Select value={channel} onValueChange={(v) => setChannel(v as OutreachChannel)}>
           <SelectTrigger className="w-44 rounded-full">
