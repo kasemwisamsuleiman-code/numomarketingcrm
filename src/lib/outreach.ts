@@ -41,11 +41,27 @@ export type OutreachLead = {
   reply_detected: boolean;
   stop_outreach: boolean;
   outreach_attempts: number;
+  sequence_step: number;
+  opted_out: boolean;
+  sms_consent: boolean;
   lead_score: number | null;
 };
 
+/** Tracker statuses that permanently end outreach for a lead. */
+export const TERMINAL_STATUSES = ["REPLIED", "MEETING SET", "CLIENT", "NOT INTERESTED"];
+
+/** Can this lead legally/logically receive another outreach touch on this channel? */
+export function isEligibleForOutreach(lead: OutreachLead, channel?: OutreachChannel | null) {
+  if (lead.stop_outreach || lead.opted_out || lead.reply_detected) return false;
+  if (TERMINAL_STATUSES.includes(lead.status)) return false;
+  const ch = channel ?? (lead.outreach_channel as OutreachChannel | null) ?? "EMAIL";
+  if (ch === "EMAIL") return Boolean(lead.email);
+  if (ch === "SMS") return Boolean(lead.phone) && lead.sms_consent === true;
+  return Boolean(lead.phone);
+}
+
 export const OUTREACH_SELECT =
-  "id, business_name, category, location, phone, email, website, status, outreach_channel, outreach_status, queued_at, last_contacted_at, next_follow_up_at, reply_detected, stop_outreach, outreach_attempts, lead_score";
+  "id, business_name, category, location, phone, email, website, status, outreach_channel, outreach_status, queued_at, last_contacted_at, next_follow_up_at, reply_detected, stop_outreach, outreach_attempts, sequence_step, opted_out, sms_consent, lead_score";
 
 export type AutomationLog = {
   id: string;
@@ -86,6 +102,10 @@ function iso(offsetMs = 0) {
 /** Queue a lead for a channel. Tracker status stays READY until a send happens. */
 export async function queueLead(userId: string, lead: OutreachLead, channel: OutreachChannel) {
   if (lead.stop_outreach) throw new Error(`${lead.business_name} has outreach stopped.`);
+  if (lead.opted_out) throw new Error(`${lead.business_name} opted out of outreach.`);
+  if (TERMINAL_STATUSES.includes(lead.status)) throw new Error(`${lead.business_name} is ${lead.status} — outreach is closed.`);
+  if (channel === "SMS" && !lead.sms_consent)
+    throw new Error(`${lead.business_name} has no recorded SMS consent. SMS requires a compliant opt-in.`);
   if (channel === "EMAIL" && !lead.email) throw new Error(`${lead.business_name} has no email address.`);
   if (channel === "SMS" && !lead.phone) throw new Error(`${lead.business_name} has no phone number.`);
 
@@ -144,6 +164,7 @@ export async function simulateSend(userId: string, lead: OutreachLead) {
       last_contacted_at: now,
       next_follow_up_at: iso(FOLLOW_UP_DAYS * 86_400_000),
       outreach_attempts: (lead.outreach_attempts ?? 0) + 1,
+      sequence_step: (lead.sequence_step ?? 0) + 1,
     })
     .eq("id", lead.id);
   if (error) throw error;
@@ -169,6 +190,7 @@ export async function simulateFollowUp(userId: string, lead: OutreachLead) {
       last_contacted_at: iso(),
       next_follow_up_at: iso(FOLLOW_UP_DAYS * 86_400_000),
       outreach_attempts: (lead.outreach_attempts ?? 0) + 1,
+      sequence_step: (lead.sequence_step ?? 0) + 1,
     })
     .eq("id", lead.id);
   if (error) throw error;
@@ -266,4 +288,59 @@ export function isFollowUpDue(lead: OutreachLead, now = Date.now()) {
     !!lead.next_follow_up_at &&
     new Date(lead.next_follow_up_at).getTime() <= now
   );
+}
+
+/** Record an opt-out (unsubscribe / STOP). Permanently blocks all future outreach. */
+export async function optOutLead(userId: string, lead: OutreachLead, detail = "Opted out") {
+  const { error } = await supabase
+    .from("leads")
+    .update({
+      opted_out: true,
+      opted_out_at: new Date().toISOString(),
+      stop_outreach: true,
+      outreach_status: "STOPPED",
+      next_follow_up_at: null,
+      status: lead.status === "CLIENT" || lead.status === "MEETING SET" ? lead.status : "NOT INTERESTED",
+    })
+    .eq("id", lead.id);
+  if (error) throw error;
+  if (lead.phone) {
+    await supabase
+      .from("sms_suppressions")
+      .upsert({ user_id: userId, phone: lead.phone, reason: "STOP", detail }, { onConflict: "user_id,phone" });
+  }
+  if (lead.email) {
+    await supabase
+      .from("email_suppressions")
+      .upsert({ user_id: userId, email: lead.email.trim().toLowerCase(), reason: "UNSUBSCRIBE", detail });
+  }
+  await logAutomation({
+    userId,
+    leadId: lead.id,
+    leadName: lead.business_name,
+    action: "OPTED_OUT",
+    channel: lead.outreach_channel,
+    detail,
+  });
+}
+
+/** Record (or revoke) a compliant SMS consent basis for a lead. */
+export async function setSmsConsent(userId: string, lead: OutreachLead, consent: boolean, source: string) {
+  const { error } = await supabase
+    .from("leads")
+    .update({
+      sms_consent: consent,
+      sms_consent_source: consent ? source : null,
+      sms_consent_at: consent ? new Date().toISOString() : null,
+    })
+    .eq("id", lead.id);
+  if (error) throw error;
+  await logAutomation({
+    userId,
+    leadId: lead.id,
+    leadName: lead.business_name,
+    action: consent ? "SMS_CONSENT_RECORDED" : "SMS_CONSENT_REVOKED",
+    channel: "SMS",
+    detail: consent ? `Basis: ${source}` : "Consent revoked",
+  });
 }
