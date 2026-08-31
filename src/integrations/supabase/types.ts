@@ -103,6 +103,155 @@ export type Database = {
         }
         Relationships: []
       }
+      email_sends: {
+        Row: {
+          attempt_no: number
+          body: string
+          created_at: string
+          error: string | null
+          id: string
+          kind: string
+          lead_id: string | null
+          lead_name: string
+          provider: string
+          provider_message_id: string | null
+          sent_at: string | null
+          status: string
+          subject: string
+          to_email: string
+          user_id: string
+        }
+        Insert: {
+          attempt_no?: number
+          body?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind?: string
+          lead_id?: string | null
+          lead_name?: string
+          provider?: string
+          provider_message_id?: string | null
+          sent_at?: string | null
+          status?: string
+          subject?: string
+          to_email: string
+          user_id: string
+        }
+        Update: {
+          attempt_no?: number
+          body?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind?: string
+          lead_id?: string | null
+          lead_name?: string
+          provider?: string
+          provider_message_id?: string | null
+          sent_at?: string | null
+          status?: string
+          subject?: string
+          to_email?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_sends_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_settings: {
+        Row: {
+          created_at: string
+          daily_cap: number
+          follow_up_body: string
+          follow_up_delay_days: number
+          follow_up_subject: string
+          from_email: string
+          from_name: string
+          initial_body: string
+          initial_subject: string
+          live_enabled: boolean
+          max_follow_ups: number
+          reply_to: string
+          send_end_hour: number
+          send_start_hour: number
+          timezone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          daily_cap?: number
+          follow_up_body?: string
+          follow_up_delay_days?: number
+          follow_up_subject?: string
+          from_email?: string
+          from_name?: string
+          initial_body?: string
+          initial_subject?: string
+          live_enabled?: boolean
+          max_follow_ups?: number
+          reply_to?: string
+          send_end_hour?: number
+          send_start_hour?: number
+          timezone?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          daily_cap?: number
+          follow_up_body?: string
+          follow_up_delay_days?: number
+          follow_up_subject?: string
+          from_email?: string
+          from_name?: string
+          initial_body?: string
+          initial_subject?: string
+          live_enabled?: boolean
+          max_follow_ups?: number
+          reply_to?: string
+          send_end_hour?: number
+          send_start_hour?: number
+          timezone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      email_suppressions: {
+        Row: {
+          created_at: string
+          detail: string | null
+          email: string
+          id: string
+          reason: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: string | null
+          email: string
+          id?: string
+          reason?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          detail?: string | null
+          email?: string
+          id?: string
+          reason?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       invoices: {
         Row: {
           amount_paid: number
