@@ -22,9 +22,10 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
-// Private team-only CRM: self-serve signup is disabled in the backend too.
-// Flip to true only if public registration is ever intended.
-const SIGNUPS_OPEN = false;
+// Team workspace: anyone can create an account, but only emails on the
+// approved team list (Settings → Team access) can see any CRM data.
+const SIGNUPS_OPEN = true;
+
 
 function AuthPage() {
   const navigate = useNavigate();
