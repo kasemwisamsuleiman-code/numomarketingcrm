@@ -10,6 +10,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getLeadGenStatus } from "@/lib/leadgen.functions";
 import { EmailOutreachSettings } from "@/components/crm/EmailOutreachSettings";
 import { SmsOutreachSettings } from "@/components/crm/SmsOutreachSettings";
+import { TeamAccess } from "@/components/crm/TeamAccess";
+
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
