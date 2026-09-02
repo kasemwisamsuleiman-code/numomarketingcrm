@@ -105,7 +105,7 @@ function SettingsPage() {
           <div>
             <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Data privacy</dt>
             <dd className="mt-1 text-sm text-muted-foreground">
-              All leads, meetings, clients and invoices are private to your account.
+              Only approved team emails can access this workspace.
             </dd>
           </div>
           <div>
@@ -114,6 +114,9 @@ function SettingsPage() {
           </div>
         </dl>
       </section>
+
+      <TeamAccess />
+
 
       <section className="panel mt-8 p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
