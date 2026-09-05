@@ -487,3 +487,195 @@ function trimWords(value: string, max: number) {
   const words = value.trim().split(/\s+/).filter(Boolean);
   return words.length <= max ? words.join(" ") : `${words.slice(0, max).join(" ")}`;
 }
+
+/* ------------------------------------------------------------------ *
+ * Parallel qualification / enrichment
+ * ------------------------------------------------------------------ */
+
+import { chunk as chunkList, mapPool } from "./concurrency";
+
+/** Stable cache key for a business, so it is never enriched twice. */
+export function enrichmentCacheKey(candidate: {
+  business_name?: string | null;
+  location?: string | null;
+  phone?: string | null;
+  website?: string | null;
+}) {
+  const phone = (candidate.phone ?? "").replace(/\D/g, "").slice(-10);
+  if (phone.length === 10) return `p:${phone}`;
+  const host = (candidate.website ?? "")
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split("/")[0];
+  if (host) return `w:${host}`;
+  return `n:${normalizeName(candidate.business_name ?? "")}|${normalizeName(candidate.location ?? "").slice(0, 40)}`;
+}
+
+/** Fields we still need the AI to work on for this candidate. */
+function missingFields(candidate: RawCandidate) {
+  const missing: string[] = [];
+  if (!cleanPhone(candidate.phone ?? null)) missing.push("phone");
+  if (!cleanEmail(candidate.email ?? null)) missing.push("email");
+  if (!candidate.website) missing.push("website");
+  if (!candidate.business_hours) missing.push("business_hours");
+  return missing;
+}
+
+const QUALIFY_SYSTEM =
+  "You qualify outbound leads for Numo Marketing, a small agency selling websites, local SEO and reactivation campaigns to small local businesses. Reject national chains, franchises, big-box retailers and businesses that clearly do not need marketing help. Favour small, family-owned, owner-operated businesses.";
+
+const QUALIFY_TOOL = {
+  name: "return_qualified",
+  description: "Return qualified leads",
+  parameters: {
+    type: "object",
+    properties: {
+      leads: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            business_name: { type: "string" },
+            category: { type: "string" },
+            location: { type: "string" },
+            phone: { type: "string" },
+            email: { type: "string" },
+            website: { type: "string" },
+            business_hours: { type: "string" },
+            personalized_line: { type: "string" },
+            lead_score: { type: "number" },
+            outreach_channel: { type: "string", enum: ["SMS", "EMAIL", "CALL"] },
+            notes: { type: "string" },
+          },
+          required: ["business_name", "personalized_line", "lead_score", "outreach_channel"],
+        },
+      },
+    },
+    required: ["leads"],
+  },
+};
+
+/**
+ * Qualifies ONE small group of candidates. Scraped contact details are treated
+ * as verified truth: the AI is only asked to fill genuinely missing fields, and
+ * its answers can never overwrite a scraped phone/email/website.
+ */
+async function qualifyChunk(
+  candidates: RawCandidate[],
+  category: string,
+  location: string,
+): Promise<QualifiedLead[]> {
+  const payload = candidates.map((c) => ({ ...c, missing_fields: missingFields(c) }));
+  const out = await callAi(
+    QUALIFY_SYSTEM,
+    `Target search: ${category} in ${location}.\n\nQualify these candidates. For each KEPT lead return a lead_score 0-100 (fit + reachability + likely need), a personalized_line that is a natural, human, non-salesy opening under 30 words referencing something specific about the business, and outreach_channel: SMS if only a mobile-style phone exists, EMAIL if an email exists, CALL otherwise. Only supply contact details listed in that candidate's missing_fields, and only when you are confident they are real and complete — otherwise omit them. Never invent partial or placeholder details. Put a one-line qualification rationale in notes. Drop chains and poor fits entirely.\n\nCandidates JSON:\n${JSON.stringify(payload).slice(0, 60000)}`,
+    QUALIFY_TOOL,
+  );
+
+  const raw = (out["leads"] as Array<Record<string, unknown>> | undefined) ?? [];
+  const bySource = new Map(candidates.map((c) => [normalizeName(c.business_name), c] as const));
+  const seen = new Set<string>();
+  const qualified: QualifiedLead[] = [];
+
+  for (const l of raw) {
+    const name = String(l["business_name"] ?? "").trim();
+    if (!name) continue;
+    const key = normalizeName(name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const source = bySource.get(key);
+
+    const line = trimWords(String(l["personalized_line"] ?? ""), 30);
+    // Low-confidence guard: no usable opener means we do not keep the lead.
+    if (line.split(/\s+/).filter(Boolean).length < 4) continue;
+
+    // Verified scraped values always win; AI only fills the gaps.
+    const phone = cleanPhone(str(source?.phone ?? null)) ?? cleanPhone(str(l["phone"]));
+    const email = cleanEmail(str(source?.email ?? null)) ?? cleanEmail(str(l["email"]));
+    const website = str(source?.website ?? null) ?? str(l["website"]);
+    const hours = str(source?.business_hours ?? null) ?? str(l["business_hours"]);
+
+    // Reject unreachable leads — no channel means no outreach value.
+    if (!phone && !email && !website) continue;
+
+    const channel = String(l["outreach_channel"] ?? "").toUpperCase();
+    const resolvedChannel: "SMS" | "EMAIL" | "CALL" = email
+      ? channel === "SMS" || channel === "CALL"
+        ? (channel as "SMS" | "CALL")
+        : "EMAIL"
+      : phone
+        ? channel === "SMS"
+          ? "SMS"
+          : "CALL"
+        : "EMAIL";
+
+    qualified.push({
+      business_name: name,
+      category: str(source?.category ?? null) ?? str(l["category"]) ?? category,
+      location: str(source?.location ?? null) ?? str(l["location"]) ?? location,
+      phone,
+      email,
+      website,
+      business_hours: hours,
+      personalized_line: line,
+      lead_score: clampScore(Number(l["lead_score"])),
+      outreach_channel: resolvedChannel,
+      notes: str(l["notes"]),
+    });
+  }
+  return qualified;
+}
+
+export type ParallelQualifyResult = {
+  qualified: QualifiedLead[];
+  rejected: number;
+  failures: number;
+  concurrency: number;
+};
+
+/**
+ * Enriches many candidates at once instead of in one giant sequential call.
+ * Small groups run through an adaptive pool (scales up while the provider is
+ * happy, halves on a rate limit) and each finished group is handed straight to
+ * `onBatch` so leads can be saved and shown while the rest is still running.
+ */
+export async function qualifyCandidatesParallel(
+  candidates: RawCandidate[],
+  category: string,
+  location: string,
+  options: {
+    groupSize?: number;
+    concurrency?: number;
+    maxConcurrency?: number;
+    onBatch?: (leads: QualifiedLead[]) => Promise<void> | void;
+  } = {},
+): Promise<ParallelQualifyResult> {
+  if (candidates.length === 0) return { qualified: [], rejected: 0, failures: 0, concurrency: 0 };
+
+  const groups = chunkList(candidates, options.groupSize ?? 5);
+  const all: QualifiedLead[] = [];
+
+  const pool = await mapPool(
+    groups,
+    async (group) => {
+      const leads = await qualifyChunk(group, category, location);
+      all.push(...leads);
+      if (options.onBatch) await options.onBatch(leads);
+      return leads.length;
+    },
+    {
+      concurrency: options.concurrency ?? 10,
+      maxConcurrency: options.maxConcurrency ?? 24,
+      minConcurrency: 2,
+      retries: 3,
+    },
+  );
+
+  return {
+    qualified: all,
+    rejected: Math.max(0, candidates.length - all.length),
+    failures: pool.failures.length,
+    concurrency: pool.finalConcurrency,
+  };
+}
