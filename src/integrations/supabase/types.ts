@@ -329,6 +329,39 @@ export type Database = {
           },
         ]
       }
+      lead_enrichment_cache: {
+        Row: {
+          accepted: boolean
+          business_name: string
+          cache_key: string
+          created_at: string
+          hits: number
+          id: string
+          payload: Json
+          updated_at: string
+        }
+        Insert: {
+          accepted?: boolean
+          business_name?: string
+          cache_key: string
+          created_at?: string
+          hits?: number
+          id?: string
+          payload?: Json
+          updated_at?: string
+        }
+        Update: {
+          accepted?: boolean
+          business_name?: string
+          cache_key?: string
+          created_at?: string
+          hits?: number
+          id?: string
+          payload?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       lead_gen_runs: {
         Row: {
           apify_dataset_id: string | null
@@ -349,6 +382,7 @@ export type Database = {
           skipped_duplicates: number
           source: string
           sourced_count: number
+          stage_timings: Json
           status: string
           user_id: string
         }
@@ -371,6 +405,7 @@ export type Database = {
           skipped_duplicates?: number
           source?: string
           sourced_count?: number
+          stage_timings?: Json
           status?: string
           user_id: string
         }
@@ -393,6 +428,7 @@ export type Database = {
           skipped_duplicates?: number
           source?: string
           sourced_count?: number
+          stage_timings?: Json
           status?: string
           user_id?: string
         }
