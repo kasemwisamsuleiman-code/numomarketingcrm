@@ -143,9 +143,10 @@ export const advanceLeadGeneration = createServerFn({ method: "POST" })
       }
 
       if (!datasetId) throw new Error("Apify results are unavailable for this job.");
+      const timer = createStageTimer();
       const target = run.requested;
       const alreadyAccepted = run.created_count ?? 0;
-      const remainingTarget = Math.max(0, target - alreadyAccepted);
+      let remainingSlots = Math.max(0, target - alreadyAccepted);
       const crawlLimit = run.crawl_limit || target;
 
       // Businesses already reviewed in earlier batches of THIS job — never re-qualify
@@ -154,63 +155,149 @@ export const advanceLeadGeneration = createServerFn({ method: "POST" })
         Array.isArray(run.processed_keys) ? (run.processed_keys as unknown[]).map((k) => String(k)) : [],
       );
 
-      const sourced = await pipeline.getApifyDataset(datasetId, crawlLimit, run.category, run.location);
+      const sourced = await timer.time("scraping", () =>
+        pipeline.getApifyDataset(datasetId!, crawlLimit, run.category, run.location),
+      );
       const fresh = sourced.filter((candidate) => !processedKeys.has(pipeline.normalizeName(candidate.business_name)));
       for (const candidate of fresh) processedKeys.add(pipeline.normalizeName(candidate.business_name));
 
-      const candidates = fresh.filter((candidate) => pipeline.matchesLocation(candidate.location, run.location));
-      let offRegion = fresh.length - candidates.length;
-      const { qualified: rawQualified, rejected: dropped } = await pipeline.qualifyCandidates(candidates, run.category, run.location);
-      const qualified = rawQualified.filter((lead) => {
-        if (pipeline.matchesLocation(lead.location, run.location)) return true;
-        offRegion += 1;
-        return false;
-      });
-      const { data: existing, error: existingError } = await supabase
-        .from("leads")
-        .select("business_name, location, phone, email, website");
+      const inRegion = fresh.filter((candidate) => pipeline.matchesLocation(candidate.location, run.location));
+      let offRegion = fresh.length - inRegion.length;
+
+      // ---- Duplicate protection BEFORE any enrichment spend ----
+      const { data: existing, error: existingError } = await timer.time("dedupe", async () =>
+        supabase.from("leads").select("business_name, location, phone, email, website"),
+      );
       if (existingError) throw new Error(existingError.message);
-      // Duplicate protection: business name (+location) plus phone / email / website host.
       const seen = new Set<string>();
       for (const row of existing ?? []) for (const key of dedupeKeys(row)) seen.add(key);
+
       let duplicates = 0;
-      const rows = qualified.filter((lead) => {
-        const keys = dedupeKeys(lead);
-        if (keys.some((k) => seen.has(k))) { duplicates += 1; return false; }
-        for (const k of keys) seen.add(k);
+      const candidates = inRegion.filter((candidate) => {
+        const keys = dedupeKeys(candidate);
+        if (keys.length > 0 && keys.some((k) => seen.has(k))) {
+          duplicates += 1;
+          return false;
+        }
         return true;
-      }).slice(0, remainingTarget).map((lead) => ({
-        user_id: userId,
-        business_name: lead.business_name,
-        category: lead.category,
-        location: lead.location,
-        phone: lead.phone,
-        email: lead.email,
-        website: lead.website,
-        business_hours: lead.business_hours,
-        personalized_line: lead.personalized_line,
-        lead_score: lead.lead_score,
-        outreach_channel: lead.outreach_channel,
-        source: run.source,
-        status: "READY",
-        notes: lead.notes,
-      }));
-      let insertedLeads: GeneratedLead[] = [];
-      if (rows.length > 0) {
-        const { data: inserted, error } = await supabase.from("leads").insert(rows).select();
-        if (error) throw new Error(error.message);
-        insertedLeads = (inserted ?? []).map((row) => ({
-          id: String(row.id), business_name: String(row.business_name), category: row.category ?? null,
-          location: row.location ?? null, phone: row.phone ?? null, email: row.email ?? null,
-          lead_score: row.lead_score ?? null, outreach_channel: row.outreach_channel ?? null,
-          personalized_line: row.personalized_line ?? null,
-        }));
+      });
+
+      // ---- Enrichment cache: a business analysed before is never analysed again ----
+      const cacheKeys = candidates.map((c) => pipeline.enrichmentCacheKey(c));
+      const cacheHits = new Map<string, { accepted: boolean; payload: Record<string, unknown> }>();
+      if (cacheKeys.length > 0) {
+        const { data: cached } = await timer.time("cache_read", async () =>
+          supabase.from("lead_enrichment_cache").select("cache_key, accepted, payload").in("cache_key", cacheKeys),
+        );
+        for (const row of cached ?? []) {
+          cacheHits.set(String(row.cache_key), {
+            accepted: Boolean(row.accepted),
+            payload: (row.payload ?? {}) as Record<string, unknown>,
+          });
+        }
       }
+
+      const toEnrich: typeof candidates = [];
+      const cachedQualified: QualifiedLead[] = [];
+      candidates.forEach((candidate, index) => {
+        const hit = cacheHits.get(cacheKeys[index] as string);
+        if (!hit) {
+          toEnrich.push(candidate);
+          return;
+        }
+        if (hit.accepted && hit.payload["business_name"]) cachedQualified.push(hit.payload as unknown as QualifiedLead);
+        else offRegion += 0; // cached rejection: skip silently, counted as rejected below
+      });
+      const cachedRejections = candidates.length - toEnrich.length - cachedQualified.length;
+
+      // ---- Progressive save: each finished group is written immediately ----
+      const insertedLeads: GeneratedLead[] = [];
+      const cacheWrites: Array<{ cache_key: string; business_name: string; accepted: boolean; payload: QualifiedLead }> = [];
+
+      const saveBatch = async (leads: QualifiedLead[]) => {
+        const rows = leads
+          .filter((lead) => {
+            if (!pipeline.matchesLocation(lead.location, run.location)) {
+              offRegion += 1;
+              return false;
+            }
+            const keys = dedupeKeys(lead);
+            if (keys.some((k) => seen.has(k))) {
+              duplicates += 1;
+              return false;
+            }
+            for (const k of keys) seen.add(k);
+            return true;
+          })
+          .slice(0, remainingSlots)
+          .map((lead) => {
+            cacheWrites.push({
+              cache_key: pipeline.enrichmentCacheKey(lead),
+              business_name: lead.business_name,
+              accepted: true,
+              payload: lead,
+            });
+            return {
+              user_id: userId,
+              business_name: lead.business_name,
+              category: lead.category,
+              location: lead.location,
+              phone: lead.phone,
+              email: lead.email,
+              website: lead.website,
+              business_hours: lead.business_hours,
+              personalized_line: lead.personalized_line,
+              lead_score: lead.lead_score,
+              outreach_channel: lead.outreach_channel,
+              source: run.source,
+              status: "READY",
+              notes: lead.notes,
+            };
+          });
+        if (rows.length === 0) return;
+        remainingSlots -= rows.length;
+        // One batched insert per finished group instead of a write per lead.
+        const { data: inserted, error } = await timer.time("db_writes", async () =>
+          supabase.from("leads").insert(rows).select(),
+        );
+        if (error) throw new Error(error.message);
+        for (const row of inserted ?? []) {
+          insertedLeads.push({
+            id: String(row.id), business_name: String(row.business_name), category: row.category ?? null,
+            location: row.location ?? null, phone: row.phone ?? null, email: row.email ?? null,
+            lead_score: row.lead_score ?? null, outreach_channel: row.outreach_channel ?? null,
+            personalized_line: row.personalized_line ?? null,
+          });
+        }
+      };
+
+      // Cached leads land in the CRM instantly, before any provider call runs.
+      if (cachedQualified.length > 0) await saveBatch(cachedQualified);
+
+      const enrichment = await timer.time("enrichment", () =>
+        pipeline.qualifyCandidatesParallel(toEnrich, run.category, run.location, {
+          groupSize: 5,
+          concurrency: 10,
+          maxConcurrency: 24,
+          onBatch: saveBatch,
+        }),
+      );
+
+      if (cacheWrites.length > 0) {
+        await timer.time("cache_write", async () =>
+          supabase.from("lead_enrichment_cache").upsert(cacheWrites, { onConflict: "cache_key" }),
+        );
+      }
+
+      const dropped = enrichment.rejected + cachedRejections;
+      const stageTimings = { ...timer.summary(), concurrency: enrichment.concurrency, enrichment_failures: enrichment.failures };
+      console.info(`[leadgen ${run.id}] stage timings`, stageTimings);
 
       const accepted = alreadyAccepted + insertedLeads.length;
       const totalDuplicates = (run.skipped_duplicates ?? 0) + duplicates;
       const totalRejected = (run.rejected_count ?? 0) + dropped + offRegion;
       const totalSourced = (run.sourced_count ?? 0) + fresh.length;
+
       const batches = run.batch_count ?? 1;
       const elapsed = Date.now() - new Date(run.created_at).getTime();
 
