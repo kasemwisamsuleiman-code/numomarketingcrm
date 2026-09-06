@@ -8,6 +8,7 @@ import {
   Users,
   FileText,
   Settings,
+  MessageSquare,
   Zap,
   Menu,
   X,
