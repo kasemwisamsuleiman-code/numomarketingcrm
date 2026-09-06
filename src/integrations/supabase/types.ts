@@ -439,11 +439,14 @@ export type Database = {
           business_hours: string | null
           business_name: string
           category: string | null
+          conversation_status: string
           created_at: string
           date_added: string
           email: string | null
           id: string
           last_contacted_at: string | null
+          last_reply: string | null
+          last_sms_sent: string | null
           lead_score: number | null
           location: string | null
           next_follow_up_at: string | null
@@ -458,6 +461,7 @@ export type Database = {
           outreach_status: string
           personalized_line: string | null
           phone: string | null
+          phone_e164: string | null
           queued_at: string | null
           reply_detected: boolean
           sequence_step: number
@@ -475,11 +479,14 @@ export type Database = {
           business_hours?: string | null
           business_name: string
           category?: string | null
+          conversation_status?: string
           created_at?: string
           date_added?: string
           email?: string | null
           id?: string
           last_contacted_at?: string | null
+          last_reply?: string | null
+          last_sms_sent?: string | null
           lead_score?: number | null
           location?: string | null
           next_follow_up_at?: string | null
@@ -494,6 +501,7 @@ export type Database = {
           outreach_status?: string
           personalized_line?: string | null
           phone?: string | null
+          phone_e164?: string | null
           queued_at?: string | null
           reply_detected?: boolean
           sequence_step?: number
@@ -511,11 +519,14 @@ export type Database = {
           business_hours?: string | null
           business_name?: string
           category?: string | null
+          conversation_status?: string
           created_at?: string
           date_added?: string
           email?: string | null
           id?: string
           last_contacted_at?: string | null
+          last_reply?: string | null
+          last_sms_sent?: string | null
           lead_score?: number | null
           location?: string | null
           next_follow_up_at?: string | null
@@ -530,6 +541,7 @@ export type Database = {
           outreach_status?: string
           personalized_line?: string | null
           phone?: string | null
+          phone_e164?: string | null
           queued_at?: string | null
           reply_detected?: boolean
           sequence_step?: number
@@ -604,6 +616,47 @@ export type Database = {
           },
           {
             foreignKeyName: "meetings_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          created_at: string
+          direction: string
+          intent: string | null
+          lead_id: string
+          message_body: string
+          message_id: string
+          twilio_message_sid: string | null
+          twilio_status: string | null
+        }
+        Insert: {
+          created_at?: string
+          direction: string
+          intent?: string | null
+          lead_id: string
+          message_body: string
+          message_id?: string
+          twilio_message_sid?: string | null
+          twilio_status?: string | null
+        }
+        Update: {
+          created_at?: string
+          direction?: string
+          intent?: string | null
+          lead_id?: string
+          message_body?: string
+          message_id?: string
+          twilio_message_sid?: string | null
+          twilio_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
