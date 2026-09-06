@@ -23,6 +23,7 @@ const NAV = [
   { to: "/generator", label: "Lead Generator", icon: Sparkles },
   { to: "/leads", label: "Lead Tracker", icon: Target },
   { to: "/automation", label: "Automation", icon: Zap },
+  { to: "/sms-outreach", label: "SMS Outreach", icon: MessageSquare },
   { to: "/meetings", label: "Meetings", icon: CalendarDays },
   { to: "/clients", label: "Clients", icon: Users },
   { to: "/invoices", label: "Invoices", icon: FileText },
