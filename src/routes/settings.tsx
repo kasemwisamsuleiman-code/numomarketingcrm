@@ -7,7 +7,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
-import { getLeadGenStatus } from "@/lib/leadgen.functions";
 import { EmailOutreachSettings } from "@/components/crm/EmailOutreachSettings";
 import { SmsOutreachSettings } from "@/components/crm/SmsOutreachSettings";
 import { TeamAccess } from "@/components/crm/TeamAccess";
@@ -82,12 +81,6 @@ const MODULES: Module[] = [
 
 function SettingsPage() {
   const { user } = useAuth();
-  const { data: status } = useQuery({
-    queryKey: ["leadgen-status"],
-    queryFn: () => getLeadGenStatus(),
-  });
-
-
   return (
     <AppShell
       title="Settings & Integrations"
@@ -120,57 +113,6 @@ function SettingsPage() {
       <TeamAccess />
 
 
-      <section className="panel mt-8 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-display text-lg font-semibold">Lead sourcing credentials</h2>
-          <div className="flex gap-2">
-            <Badge
-              variant="outline"
-              className={
-                status?.apifyConnected
-                  ? "border-gold/50 bg-gold-soft text-gold-foreground"
-                  : "border-border bg-muted text-muted-foreground"
-              }
-            >
-              Apify {status?.apifyConnected ? "connected" : "not connected"}
-            </Badge>
-            <Badge
-              variant="outline"
-              className={
-                status?.aiConnected
-                  ? "border-gold/50 bg-gold-soft text-gold-foreground"
-                  : "border-border bg-muted text-muted-foreground"
-              }
-            >
-              AI {status?.aiConnected ? "connected" : "not connected"}
-            </Badge>
-            <Badge
-              variant="outline"
-              className={
-                status?.openaiConfigured
-                  ? "border-gold/50 bg-gold-soft text-gold-foreground"
-                  : "border-border bg-muted text-muted-foreground"
-              }
-            >
-              OpenAI key {status?.openaiConfigured ? "detected" : "not set"}
-            </Badge>
-          </div>
-        </div>
-        <p className="mt-3 text-sm text-muted-foreground">
-          Add your Apify API token privately in <span className="font-medium text-foreground">Project Settings → Secrets</span>{" "}
-          using the name <code className="rounded bg-muted px-1.5 py-0.5 text-xs">APIFY_API_TOKEN</code>. The token is stored
-          server-side only — it is never sent to the browser, logged, or shown here. Once saved, the Lead Generator switches
-          from AI-sourced candidates to live Google Maps scraping automatically.
-        </p>
-        <p className="mt-3 text-sm text-muted-foreground">
-          Lead qualification, scoring, personalized lines and outreach channel now run on your own OpenAI key via the
-          secret named <code className="rounded bg-muted px-1.5 py-0.5 text-xs">OPENAI_API_KEY</code>. It is read
-          server-side only. Active AI provider:{" "}
-          <span className="font-medium text-foreground">{status?.aiProvider ?? "none configured"}</span>. If the key is
-          removed, generation falls back to the managed AI provider rather than inventing leads.
-        </p>
-
-      </section>
 
       <EmailOutreachSettings />
 

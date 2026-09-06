@@ -1,17 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
-import { Target, Mail, Phone, Send, MessageSquare, CalendarCheck, Users, FileText, Sparkles, Loader2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Target, Mail, Phone, Send, MessageSquare, CalendarCheck, Users, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { RequireAuth } from "@/components/crm/RequireAuth";
 import { AppShell, EmptyState, TableShell } from "@/components/crm/AppShell";
 import { KpiCard } from "@/components/crm/KpiCard";
 import { StatusPill } from "@/components/crm/StatusPill";
-import { DAILY_TARGET, formatDate, formatDateTime, money } from "@/lib/crm";
-import { advanceLeadGeneration, generateLeads } from "@/lib/leadgen.functions";
-import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
+import { formatDate, formatDateTime, money } from "@/lib/crm";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/")({
@@ -55,72 +51,6 @@ type LeadRow = {
 };
 
 function DashboardPage() {
-  const qc = useQueryClient();
-  const runGeneration = useServerFn(generateLeads);
-  const advanceGeneration = useServerFn(advanceLeadGeneration);
-  const [genCategory, setGenCategory] = useState("Barbershop");
-  const [genLocation, setGenLocation] = useState("");
-  const [activeRunId, setActiveRunId] = useState<string | null>(null);
-  const [reportedRunId, setReportedRunId] = useState<string | null>(null);
-
-  const { data: activeJobs = [] } = useQuery({
-    queryKey: ["active-lead-generation-jobs"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("lead_gen_runs")
-        .select("id, status")
-        .in("status", ["SOURCING", "QUALIFYING"])
-        .order("created_at", { ascending: false })
-        .limit(1);
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  useEffect(() => {
-    if (!activeRunId && activeJobs[0]?.id) setActiveRunId(activeJobs[0].id);
-  }, [activeJobs, activeRunId]);
-
-  const quickRun = useMutation({
-    mutationFn: async () =>
-      runGeneration({ data: { category: genCategory.trim(), location: genLocation.trim(), count: 10 } }),
-    onSuccess: (res) => {
-      setReportedRunId(null);
-      setActiveRunId(res.runId);
-      qc.invalidateQueries({ queryKey: ["lead_gen_runs"] });
-      qc.invalidateQueries({ queryKey: ["active-lead-generation-jobs"] });
-      toast.success("Lead generation started", { description: `${res.source} is sourcing businesses now.` });
-    },
-    onError: (err: Error) => toast.error("Lead generation failed", { description: err.message }),
-  });
-
-  const { data: activeRun } = useQuery({
-    queryKey: ["dashboard-generation-progress", activeRunId],
-    queryFn: () => advanceGeneration({ data: { runId: activeRunId ?? "" } }),
-    enabled: Boolean(activeRunId),
-    refetchInterval: (query) => {
-      const run = query.state.data;
-      return run?.status === "COMPLETED" || run?.status === "FAILED" ? false : 5000;
-    },
-    retry: 1,
-  });
-
-  useEffect(() => {
-    if (!activeRun || reportedRunId === activeRun.id) return;
-    if (activeRun.status === "COMPLETED") {
-      setReportedRunId(activeRun.id);
-      void qc.invalidateQueries({ queryKey: ["leads"] });
-      void qc.invalidateQueries({ queryKey: ["lead_gen_runs"] });
-      void qc.invalidateQueries({ queryKey: ["active-lead-generation-jobs"] });
-      toast.success(`${activeRun.created_count} leads added`, {
-        description: `${activeRun.skipped_duplicates} duplicates skipped · ${activeRun.rejected_count} filtered out`,
-      });
-    } else if (activeRun.status === "FAILED") {
-      setReportedRunId(activeRun.id);
-      toast.error("Lead generation failed", { description: activeRun.error ?? "The provider job did not complete." });
-    }
-  }, [activeRun, qc, reportedRunId]);
-
   const { data: leads = [], isLoading: leadsLoading } = useQuery({
     queryKey: ["leads"],
     queryFn: async () => {
@@ -201,13 +131,6 @@ function DashboardPage() {
     [invoices],
   );
 
-  const generatedLeads = useMemo(() => leads.filter((l) => (l.source ?? "MANUAL") !== "MANUAL"), [leads]);
-  const generatedToday = useMemo(() => {
-    const today = new Date().toDateString();
-    return generatedLeads.filter((l) => new Date(l.created_at).toDateString() === today).length;
-  }, [generatedLeads]);
-  const targetProgress = Math.min(100, Math.round((generatedToday / DAILY_TARGET) * 100));
-
   const recentLeads = leads.slice(0, 6);
 
   return (
@@ -219,81 +142,12 @@ function DashboardPage() {
           <Button asChild variant="outline" className="rounded-full">
             <Link to="/leads">Open Lead Tracker</Link>
           </Button>
-          <Button asChild className="rounded-full bg-gold text-gold-foreground hover:bg-gold/90">
-            <Link to="/generator">Generate leads</Link>
-          </Button>
           <Button asChild className="rounded-full bg-ink text-ink-foreground hover:bg-ink/90">
             <Link to="/invoices">Invoices</Link>
           </Button>
         </>
       }
     >
-      <section className="grid gap-4 lg:grid-cols-3">
-        <div className="ink-panel p-6 lg:col-span-2">
-          <div className="flex items-center gap-2 text-gold">
-            <Sparkles className="size-4" />
-            <span className="text-xs font-semibold uppercase tracking-[0.18em]">Lead generation</span>
-          </div>
-          <h2 className="mt-2 font-display text-2xl font-semibold text-ink-foreground">Get new leads on command</h2>
-          <p className="mt-1 max-w-xl text-sm text-ink-muted">
-            Choose a business type and location — Numo sources local businesses, filters out chains, scores each lead and
-            writes a human opening line straight into your Lead Tracker.
-          </p>
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-            <Input
-              className="rounded-full border-white/15 bg-white/10 text-ink-foreground placeholder:text-ink-muted"
-              placeholder="Business type"
-              value={genCategory}
-              onChange={(e) => setGenCategory(e.target.value)}
-              aria-label="Business type"
-            />
-            <Input
-              className="rounded-full border-white/15 bg-white/10 text-ink-foreground placeholder:text-ink-muted"
-              placeholder="Location (city)"
-              value={genLocation}
-              onChange={(e) => setGenLocation(e.target.value)}
-              aria-label="Location"
-            />
-            <Button
-              className="rounded-full bg-gold text-gold-foreground hover:bg-gold/90"
-              disabled={quickRun.isPending || Boolean(activeRunId && activeRun?.status !== "COMPLETED" && activeRun?.status !== "FAILED") || !genLocation.trim() || !genCategory.trim()}
-              onClick={() => quickRun.mutate()}
-            >
-              {quickRun.isPending || (activeRunId && activeRun?.status !== "COMPLETED" && activeRun?.status !== "FAILED") ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" /> {activeRun?.status === "QUALIFYING" ? "Qualifying…" : "Sourcing…"}
-                </>
-              ) : (
-                <>
-                  <Sparkles className="mr-2 size-4" /> Generate 10
-                </>
-              )}
-            </Button>
-          </div>
-          <Link
-            to="/generator"
-            className="mt-4 inline-block text-xs font-semibold uppercase tracking-[0.16em] text-gold hover:underline"
-          >
-            Advanced lead generator →
-          </Link>
-        </div>
-
-        <div className="panel p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Daily target</p>
-          <p className="mt-2 font-display text-4xl font-semibold">
-            {generatedToday}
-            <span className="text-base text-muted-foreground"> / {DAILY_TARGET}</span>
-          </p>
-          <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-secondary">
-            <div className="h-full rounded-full bg-gold transition-all" style={{ width: `${targetProgress}%` }} />
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">{targetProgress}% of today's 50-lead goal</p>
-          <p className="mt-4 text-sm text-muted-foreground">
-            <span className="font-semibold text-foreground">{generatedLeads.length}</span> leads generated in total
-          </p>
-        </div>
-      </section>
-
       <section className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <KpiCard label="Total leads" value={kpis.total} icon={Target} tone="ink" hint={`${kpis.contacted} contacted`} />
         <KpiCard label="Emails found" value={kpis.emails} icon={Mail} hint={pct(kpis.emails, kpis.total)} />
@@ -391,61 +245,6 @@ function DashboardPage() {
             )}
           </div>
         </div>
-      </section>
-
-      <section className="mt-8">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold">Recently generated leads</h2>
-          <Link to="/generator" className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground hover:text-foreground">
-            Lead generator
-          </Link>
-        </div>
-        <TableShell>
-          {generatedLeads.length === 0 ? (
-            <EmptyState
-              title="No generated leads yet"
-              hint="Run the lead generator to pull in scored, personalized local businesses."
-              action={
-                <Button asChild className="rounded-full bg-ink text-ink-foreground hover:bg-ink/90">
-                  <Link to="/generator">Open Lead Generator</Link>
-                </Button>
-              }
-            />
-          ) : (
-            <table className="w-full min-w-[820px] text-sm">
-              <thead className="bg-ink text-ink-foreground">
-                <tr>
-                  <Th>Business</Th>
-                  <Th>Category</Th>
-                  <Th>Score</Th>
-                  <Th>Channel</Th>
-                  <Th>Opening line</Th>
-                  <Th>Status</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {generatedLeads.slice(0, 6).map((lead) => (
-                  <tr key={lead.id} className="border-t border-border/70">
-                    <td className="px-4 py-3 font-medium">{lead.business_name}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{lead.category || "—"}</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex min-w-10 items-center justify-center rounded-full border border-gold/40 bg-gold-soft px-2 py-1 text-xs font-semibold text-gold-foreground">
-                        {lead.lead_score ?? "—"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">{lead.outreach_channel || "—"}</td>
-                    <td className="max-w-[340px] truncate px-4 py-3 text-muted-foreground">
-                      {(lead as { personalized_line?: string | null }).personalized_line || "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusPill status={lead.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </TableShell>
       </section>
     </AppShell>
   );
