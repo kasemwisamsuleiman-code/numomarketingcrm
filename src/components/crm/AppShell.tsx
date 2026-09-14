@@ -85,6 +85,8 @@ export function AppShell({
                 <p className="text-xs font-medium text-ink-foreground">{user?.email ?? "Signed out"}</p>
                 <p className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Agency workspace</p>
               </div>
+              <NotificationBell />
+
               <button
                 onClick={signOut}
                 aria-label="Sign out"
