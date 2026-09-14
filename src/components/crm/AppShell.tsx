@@ -17,6 +17,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/crm/NotificationBell";
+
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -85,6 +87,8 @@ export function AppShell({
                 <p className="text-xs font-medium text-ink-foreground">{user?.email ?? "Signed out"}</p>
                 <p className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Agency workspace</p>
               </div>
+              <NotificationBell />
+
               <button
                 onClick={signOut}
                 aria-label="Sign out"

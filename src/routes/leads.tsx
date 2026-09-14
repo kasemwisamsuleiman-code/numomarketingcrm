@@ -38,6 +38,10 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/leads")({
+  validateSearch: (search: Record<string, unknown>): { q?: string } =>
+    typeof search['q'] === "string" && search['q'] ? { q: search['q'] as string } : {},
+
+
   head: () => ({
     meta: [
       { title: "Lead Tracker — Numo CRM" },
@@ -96,7 +100,9 @@ type SortKey = "date_added" | "business_name" | "status" | "location" | "lead_sc
 function LeadsPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [search, setSearch] = useState("");
+  const { q } = Route.useSearch();
+  const [search, setSearch] = useState(q ?? "");
+
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [sortKey, setSortKey] = useState<SortKey>("date_added");
