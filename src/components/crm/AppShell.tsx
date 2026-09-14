@@ -17,6 +17,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/crm/NotificationBell";
+
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
