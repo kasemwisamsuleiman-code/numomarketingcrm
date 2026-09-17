@@ -9,6 +9,7 @@ export const LEAD_STATUSES = [
   "MEETING SET",
   "CLIENT",
   "NOT INTERESTED",
+  "NOT ANSWERED",
 ] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 
@@ -30,6 +31,7 @@ export const STATUS_TONE: Record<string, string> = {
   "MEETING SET": "bg-gold/25 text-gold-foreground border-gold/50",
   CLIENT: "bg-success/15 text-success border-success/30",
   "NOT INTERESTED": "bg-destructive/12 text-destructive border-destructive/25",
+  "NOT ANSWERED": "bg-warning/20 text-gold-foreground border-warning/40",
   SCHEDULED: "bg-info/15 text-info border-info/30",
   CONFIRMED: "bg-gold/25 text-gold-foreground border-gold/50",
   COMPLETED: "bg-success/15 text-success border-success/30",
