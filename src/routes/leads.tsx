@@ -11,6 +11,7 @@ import {
   Download,
   Upload,
   UserPlus,
+  PhoneMissed,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,7 +20,7 @@ import { RequireAuth } from "@/components/crm/RequireAuth";
 import { AppShell, EmptyState, TableShell } from "@/components/crm/AppShell";
 import { KpiCard } from "@/components/crm/KpiCard";
 import { StatusPill } from "@/components/crm/StatusPill";
-import { LEAD_STATUSES, formatDate, type LeadStatus } from "@/lib/crm";
+import { LEAD_STATUSES, computeOpenState, formatDate, type LeadStatus } from "@/lib/crm";
 import { downloadCsv, parseCsv, toCsv } from "@/lib/csv";
 import { applyConverted } from "@/lib/outreach";
 import { dedupeKeys, findDuplicateIds, isDuplicateOf } from "@/lib/dedupe";
@@ -159,6 +160,18 @@ function LeadsPage() {
       qc.invalidateQueries({ queryKey: ["leads"] });
       toast.success("Lead deleted");
     },
+  });
+
+  const notAnswered = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("leads").update({ status: "NOT ANSWERED" }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      toast.success("Marked as not answered");
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -451,7 +464,7 @@ function LeadsPage() {
               <th className="px-4 py-4 text-left uppercase">Phone</th>
               <th className="px-4 py-4 text-left uppercase">Email</th>
               <th className="px-4 py-4 text-left uppercase">Website</th>
-              <th className="px-4 py-4 text-left uppercase">Hours</th>
+              <th className="px-4 py-4 text-left uppercase">Open Now</th>
               <th className="px-4 py-4 text-left uppercase">Personalized Line</th>
               <th className="px-4 py-4 text-left">{sortBtn("lead_score", "Score")}</th>
               <th className="px-4 py-4 text-left uppercase">Channel</th>
@@ -480,7 +493,9 @@ function LeadsPage() {
                 <td className="whitespace-nowrap px-4 py-4 text-muted-foreground">{l.phone || "—"}</td>
                 <td className="px-4 py-4 text-muted-foreground">{l.email || "—"}</td>
                 <td className="max-w-[180px] truncate px-4 py-4 text-muted-foreground">{l.website || "—"}</td>
-                <td className="max-w-[160px] truncate px-4 py-4 text-muted-foreground">{l.business_hours || "—"}</td>
+                <td className="px-4 py-4">
+                  <OpenNowPill hours={l.business_hours} />
+                </td>
                 <td className="max-w-[260px] truncate px-4 py-4 text-muted-foreground">{l.personalized_line || "—"}</td>
                 <td className="px-4 py-4">
                   {typeof l.lead_score === "number" ? (
@@ -514,6 +529,16 @@ function LeadsPage() {
                       <UserPlus className="size-4" />
                     </Button>
 
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Mark as not answered"
+                      title="Mark as not answered"
+                      disabled={notAnswered.isPending || l.status === "NOT ANSWERED"}
+                      onClick={() => notAnswered.mutate(l.id)}
+                    >
+                      <PhoneMissed className="size-4 text-warning" />
+                    </Button>
                     <Button variant="ghost" size="icon" onClick={() => openEdit(l)} aria-label="Edit lead">
                       <Pencil className="size-4" />
                     </Button>
@@ -639,6 +664,25 @@ function LeadsPage() {
         </DialogContent>
       </Dialog>
     </AppShell>
+  );
+}
+
+function OpenNowPill({ hours }: { hours: string | null }) {
+  const state = computeOpenState(hours);
+  const label = state === null ? "Hours unknown" : state ? "Open now" : "Closed";
+  const tone =
+    state === null
+      ? "bg-muted text-muted-foreground border-border"
+      : state
+        ? "bg-success/15 text-success border-success/30"
+        : "bg-muted text-muted-foreground border-border";
+  return (
+    <span
+      title={hours?.trim() || "No hours on file"}
+      className={`inline-flex items-center whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wider ${tone}`}
+    >
+      {label}
+    </span>
   );
 }
 
