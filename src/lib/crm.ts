@@ -144,7 +144,7 @@ export function computeOpenState(hours: string | null | undefined, now: Date = n
     if (!timeMatches) continue;
     const m = seg.matchAll(timeRe);
     for (const t of m) {
-      let h = parseInt(t[1], 10);
+      let h = parseInt(t[1] ?? "", 10);
       const min = t[2] ? parseInt(t[2], 10) : 0;
       const meridiem = t[3]?.toLowerCase().replace(/\./g, "");
       if (meridiem === "pm" && h < 12) h += 12;
