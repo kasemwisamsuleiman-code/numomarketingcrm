@@ -115,8 +115,8 @@ export function computeOpenState(hours: string | null | undefined, now: Date = n
     const dayMatch = seg.match(new RegExp(`^(${dayToken.source})?\\s*(?:[-–—/to]+\\s*(${dayToken.source}))?`, "i"));
     let covered = true;
     if (dayMatch && (dayMatch[1] || dayMatch[2])) {
-      const start = dayMatch[1] ? DAY_ALIASES[dayMatch[1].toLowerCase()] : undefined;
-      const end = dayMatch[2] ? DAY_ALIASES[dayMatch[2].toLowerCase()] : undefined;
+      const start = dayMatch[1] ? DAY_ALIASES[dayMatch[1].toLowerCase() as string] : undefined;
+      const end = dayMatch[2] ? DAY_ALIASES[dayMatch[2].toLowerCase() as string] : undefined;
       if (start === undefined && end === undefined) covered = true;
       else if (start !== undefined && end === undefined) covered = today === start;
       else if (start === undefined && end !== undefined) covered = today === end;
@@ -154,7 +154,8 @@ export function computeOpenState(hours: string | null | undefined, now: Date = n
       if (times.length === 2) break;
     }
     if (times.length < 2) continue;
-    const [startMin, endMin] = times;
+    const startMin = times[0] as number;
+    const endMin = times[1] as number;
     const nowMin = now.getHours() * 60 + now.getMinutes();
     const within = startMin <= endMin ? nowMin >= startMin && nowMin < endMin : nowMin >= startMin || nowMin < endMin;
     if (within) open = true;
