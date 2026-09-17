@@ -108,6 +108,7 @@ export function computeOpenState(hours: string | null | undefined, now: Date = n
   const today = now.getDay();
 
   let segmentMatched = false;
+  let foundSignal = false;
   let open = false;
 
   for (const seg of segments) {
@@ -130,6 +131,7 @@ export function computeOpenState(hours: string | null | undefined, now: Date = n
     segmentMatched = true;
 
     if (/closed/i.test(seg)) {
+      foundSignal = true;
       open = false;
       continue;
     }
@@ -154,6 +156,7 @@ export function computeOpenState(hours: string | null | undefined, now: Date = n
       if (times.length === 2) break;
     }
     if (times.length < 2) continue;
+    foundSignal = true;
     const startMin = times[0] as number;
     const endMin = times[1] as number;
     const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -161,7 +164,7 @@ export function computeOpenState(hours: string | null | undefined, now: Date = n
     if (within) open = true;
   }
 
-  if (!segmentMatched) return null;
+  if (!segmentMatched || !foundSignal) return null;
   return open;
 }
 
