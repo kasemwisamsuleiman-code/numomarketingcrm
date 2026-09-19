@@ -18,6 +18,7 @@ import { Route as LeadsRouteImport } from './routes/leads'
 import { Route as MeetingsRouteImport } from './routes/meetings'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SmsOutreachRouteImport } from './routes/sms-outreach'
+import { Route as ApiPublicImportLeadsRouteImport } from './routes/api/public/import-leads'
 import { Route as ApiPublicUnsubscribeRouteImport } from './routes/api/public/unsubscribe'
 
 const IndexRoute = IndexRouteImport.update({
@@ -65,6 +66,11 @@ const SmsOutreachRoute = SmsOutreachRouteImport.update({
   path: '/sms-outreach',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicImportLeadsRoute = ApiPublicImportLeadsRouteImport.update({
+  id: '/api/public/import-leads',
+  path: '/api/public/import-leads',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicUnsubscribeRoute = ApiPublicUnsubscribeRouteImport.update({
   id: '/api/public/unsubscribe',
   path: '/api/public/unsubscribe',
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/meetings': typeof MeetingsRoute
   '/settings': typeof SettingsRoute
   '/sms-outreach': typeof SmsOutreachRoute
+  '/api/public/import-leads': typeof ApiPublicImportLeadsRoute
   '/api/public/unsubscribe': typeof ApiPublicUnsubscribeRoute
 }
 export interface FileRoutesByTo {
@@ -93,6 +100,7 @@ export interface FileRoutesByTo {
   '/meetings': typeof MeetingsRoute
   '/settings': typeof SettingsRoute
   '/sms-outreach': typeof SmsOutreachRoute
+  '/api/public/import-leads': typeof ApiPublicImportLeadsRoute
   '/api/public/unsubscribe': typeof ApiPublicUnsubscribeRoute
 }
 export interface FileRoutesById {
@@ -106,6 +114,7 @@ export interface FileRoutesById {
   '/meetings': typeof MeetingsRoute
   '/settings': typeof SettingsRoute
   '/sms-outreach': typeof SmsOutreachRoute
+  '/api/public/import-leads': typeof ApiPublicImportLeadsRoute
   '/api/public/unsubscribe': typeof ApiPublicUnsubscribeRoute
 }
 export interface FileRouteTypes {
@@ -120,6 +129,7 @@ export interface FileRouteTypes {
     | '/meetings'
     | '/settings'
     | '/sms-outreach'
+    | '/api/public/import-leads'
     | '/api/public/unsubscribe'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -132,6 +142,7 @@ export interface FileRouteTypes {
     | '/meetings'
     | '/settings'
     | '/sms-outreach'
+    | '/api/public/import-leads'
     | '/api/public/unsubscribe'
   id:
     | '__root__'
@@ -144,6 +155,7 @@ export interface FileRouteTypes {
     | '/meetings'
     | '/settings'
     | '/sms-outreach'
+    | '/api/public/import-leads'
     | '/api/public/unsubscribe'
   fileRoutesById: FileRoutesById
 }
@@ -157,6 +169,7 @@ export interface RootRouteChildren {
   MeetingsRoute: typeof MeetingsRoute
   SettingsRoute: typeof SettingsRoute
   SmsOutreachRoute: typeof SmsOutreachRoute
+  ApiPublicImportLeadsRoute: typeof ApiPublicImportLeadsRoute
   ApiPublicUnsubscribeRoute: typeof ApiPublicUnsubscribeRoute
 }
 
@@ -225,6 +238,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SmsOutreachRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/import-leads': {
+      id: '/api/public/import-leads'
+      path: '/api/public/import-leads'
+      fullPath: '/api/public/import-leads'
+      preLoaderRoute: typeof ApiPublicImportLeadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/unsubscribe': {
       id: '/api/public/unsubscribe'
       path: '/api/public/unsubscribe'
@@ -245,6 +265,7 @@ const rootRouteChildren: RootRouteChildren = {
   MeetingsRoute: MeetingsRoute,
   SettingsRoute: SettingsRoute,
   SmsOutreachRoute: SmsOutreachRoute,
+  ApiPublicImportLeadsRoute: ApiPublicImportLeadsRoute,
   ApiPublicUnsubscribeRoute: ApiPublicUnsubscribeRoute,
 }
 export const routeTree = rootRouteImport

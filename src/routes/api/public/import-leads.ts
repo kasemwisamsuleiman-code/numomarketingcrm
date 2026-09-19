@@ -151,7 +151,7 @@ export const Route = createFileRoute("/api/public/import-leads")({
 
         let duplicates_skipped = 0;
         let invalid_skipped = 0;
-        const rows: Record<string, unknown>[] = [];
+        const rows: { user_id: string; business_name: string; [key: string]: unknown }[] = [];
 
         for (const raw of rawItems) {
           if (!raw || typeof raw !== "object") {
@@ -214,7 +214,7 @@ export const Route = createFileRoute("/api/public/import-leads")({
         let inserted = 0;
         for (let i = 0; i < rows.length; i += 200) {
           const chunk = rows.slice(i, i + 200);
-          const { error, data } = await supabaseAdmin.from("leads").insert(chunk).select("id");
+          const { error, data } = await supabaseAdmin.from("leads").insert(chunk as never).select("id");
           if (error) return json({ error: error.message, received, inserted, duplicates_skipped, invalid_skipped }, 500);
           inserted += data?.length ?? chunk.length;
         }
