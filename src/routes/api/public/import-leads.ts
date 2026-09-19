@@ -64,6 +64,15 @@ function formatHours(raw: unknown): string {
   return "";
 }
 
+/** Lead score: accept only a real number in 0-100, otherwise ignore it. */
+function parseScore(raw: unknown): number | null {
+  if (raw === null || raw === undefined || raw === "") return null;
+  const value = typeof raw === "number" ? raw : Number(firstString(raw));
+  if (!Number.isFinite(value)) return null;
+  const rounded = Math.round(value);
+  return rounded >= 0 && rounded <= 100 ? rounded : null;
+}
+
 function buildLocation(item: AnyItem): string {
   const direct = pick(item, ["full_address", "fullAddress", "address", "formatted_address", "street_address", "location"]);
   if (direct) return direct.slice(0, 200);
@@ -171,6 +180,10 @@ export const Route = createFileRoute("/api/public/import-leads")({
           const category = pick(item, ["category", "categories", "type", "business_type"]);
           const location = buildLocation(item);
           const business_hours = formatHours(item["opening_hours"] ?? item["openingHours"] ?? item["hours"]);
+          const lead_score = parseScore(item["lead_score"] ?? item["leadScore"] ?? item["score"]);
+          const personalized_line = firstString(
+            item["personalized_line"] ?? item["personalizedLine"] ?? item["opening_line"],
+          ).slice(0, 200);
 
           const keys = [
             normEmail(email) ? `e:${normEmail(email)}` : "",
@@ -201,6 +214,8 @@ export const Route = createFileRoute("/api/public/import-leads")({
             email: email || null,
             website: website || null,
             business_hours: business_hours || null,
+            lead_score,
+            personalized_line: personalized_line || null,
             notes: noteBits.join(" · ").slice(0, 300),
             status: "READY",
             outreach_status: "NOT_QUEUED",
