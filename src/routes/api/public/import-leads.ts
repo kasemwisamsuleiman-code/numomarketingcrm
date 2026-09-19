@@ -99,6 +99,24 @@ function normEmail(value: string): string | null {
 }
 
 /**
+ * Accepts the import secret in either "x-import-secret: <secret>" or
+ * "Authorization: Bearer <secret>". The secret is never logged or echoed.
+ */
+function secretMatches(request: Request): boolean {
+  const expected = process.env["LEAD_IMPORT_SECRET"];
+  if (!expected) return false;
+
+  const candidates: string[] = [];
+  const header = request.headers.get("x-import-secret");
+  if (header) candidates.push(header.trim());
+
+  const auth = request.headers.get("authorization");
+  if (auth && /^bearer\s+/i.test(auth)) candidates.push(auth.replace(/^bearer\s+/i, "").trim());
+
+  return candidates.some((value) => value.length === expected.length && value === expected);
+}
+
+/**
  * Secure ingestion endpoint for the Apify "Local Business Leads Scraper" actor.
  * Callers must present the server-only LEAD_IMPORT_SECRET; nothing is exposed
  * publicly and no outreach is ever triggered by an import.
@@ -107,9 +125,7 @@ export const Route = createFileRoute("/api/public/import-leads")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const expected = process.env["LEAD_IMPORT_SECRET"];
-        const provided = request.headers.get("x-import-secret") ?? "";
-        if (!expected || provided.length !== expected.length || provided !== expected) {
+        if (!secretMatches(request)) {
           return new Response("Unauthorized", { status: 401 });
         }
 
