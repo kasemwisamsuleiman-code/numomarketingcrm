@@ -37,7 +37,7 @@ type Module = {
   name: string;
   icon: LucideIcon;
   description: string;
-  status: "Connection ready" | "Planned";
+  status: "Connection ready" | "Connected via import endpoint" | "Planned";
   detail: string;
 };
 
@@ -135,7 +135,7 @@ function SettingsPage() {
                 <Badge
                   variant="outline"
                   className={
-                    m.status === "Connection ready"
+                    m.status !== "Planned"
                       ? "border-gold/50 bg-gold-soft text-gold-foreground"
                       : "border-border bg-muted text-muted-foreground"
                   }
