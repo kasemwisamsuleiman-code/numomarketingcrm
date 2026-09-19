@@ -43,11 +43,13 @@ type Module = {
 
 const MODULES: Module[] = [
   {
-    name: "Apify lead generation",
+    name: "Apify — Local Business Leads Scraper",
     icon: Database,
-    description: "Scrape local businesses by category and location, then push results straight into the Lead Tracker.",
-    status: "Connection ready",
-    detail: "Maps to leads: business_name, category, location, phone, email, website, business_hours.",
+    description:
+      "The \"Local Business Leads Scraper: Verified Business Emails & Finder\" actor pushes scraped Google Maps businesses straight into the Lead Tracker.",
+    status: "Connected via import endpoint",
+    detail:
+      "POST /api/public/import-leads · header x-import-secret · duplicates by phone, email or website are skipped automatically. No outreach is ever sent on import.",
   },
   {
     name: "OpenAI personalized lines",
