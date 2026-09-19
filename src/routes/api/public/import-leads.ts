@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 type AnyItem = Record<string, unknown>;
 
 const MAX_ITEMS = 1000;
+const MAX_NOTES = 1000;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -71,6 +72,28 @@ function parseScore(raw: unknown): number | null {
   if (!Number.isFinite(value)) return null;
   const rounded = Math.round(value);
   return rounded >= 0 && rounded <= 100 ? rounded : null;
+}
+
+/** Qualification reason: trim and cap at 500 characters; ignore if empty. */
+function parseQualificationReason(raw: unknown): string {
+  const value = firstString(raw);
+  return value ? value.slice(0, 500) : "";
+}
+
+/**
+ * Source links: accept an array of strings or a single string, keep only
+ * http/https URLs, dedupe, and cap at 5 entries.
+ */
+function parseSourceLinks(raw: unknown): string[] {
+  const candidates = Array.isArray(raw) ? raw : [raw];
+  const links: string[] = [];
+  for (const entry of candidates) {
+    const value = firstString(entry).replace(/^<+|>+$/g, "").trim();
+    if (!/^https?:\/\/\S+$/i.test(value)) continue;
+    if (!links.includes(value)) links.push(value);
+    if (links.length >= 5) break;
+  }
+  return links;
 }
 
 function buildLocation(item: AnyItem): string {
@@ -200,6 +223,10 @@ export const Route = createFileRoute("/api/public/import-leads")({
           const personalized_line = firstString(
             item["personalized_line"] ?? item["personalizedLine"] ?? item["opening_line"],
           ).slice(0, 200);
+          const qualification_reason = parseQualificationReason(
+            item["qualification_reason"] ?? item["qualificationReason"],
+          );
+          const sourceLinks = parseSourceLinks(item["source_links"] ?? item["sourceLinks"]);
 
           const keys = [
             normEmail(email) ? `e:${normEmail(email)}` : "",
@@ -215,11 +242,19 @@ export const Route = createFileRoute("/api/public/import-leads")({
 
           const rating = firstString(item["rating"] ?? item["totalScore"]);
           const reviews = firstString(item["reviews_count"] ?? item["reviewsCount"] ?? item["user_ratings_total"]);
-          const noteBits = [
+          const coreBits = [
             rating ? `Rating ${rating}` : "",
             reviews ? `${reviews} reviews` : "",
-            "Imported from Apify Local Business Leads Scraper",
+            "Imported from Apify Google Maps Scraper",
           ].filter(Boolean);
+          const qualifiedBit = qualification_reason ? `Qualified: ${qualification_reason}` : "";
+          const sourcesBit = sourceLinks.length ? `Sources: ${sourceLinks.join(", ")}` : "";
+          // Keep the rating/reviews/importer line intact: drop the sources first,
+          // then the qualification reason, if the combined note would exceed the cap.
+          let notes = [...coreBits, qualifiedBit, sourcesBit].filter(Boolean).join(" · ");
+          if (notes.length > MAX_NOTES) notes = [...coreBits, qualifiedBit].filter(Boolean).join(" · ");
+          if (notes.length > MAX_NOTES) notes = coreBits.join(" · ");
+          if (notes.length > MAX_NOTES) notes = notes.slice(0, MAX_NOTES);
 
           rows.push({
             user_id: ownerId,
@@ -232,7 +267,7 @@ export const Route = createFileRoute("/api/public/import-leads")({
             business_hours: business_hours || null,
             lead_score,
             personalized_line: personalized_line || null,
-            notes: noteBits.join(" · ").slice(0, 300),
+            notes: notes || null,
             status: "READY",
             outreach_status: "NOT_QUEUED",
             source: "APIFY_LOCAL_LEADS",
